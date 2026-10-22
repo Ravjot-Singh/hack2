@@ -5,7 +5,8 @@ Money is stored as whole rupees (int). Timestamps are timezone-aware (generated 
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, func
+from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, \
+    Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -155,6 +156,59 @@ class CustomerFeature(Base):
     expected_value_90d: Mapped[int] = mapped_column(Integer)
     segment: Mapped[str] = mapped_column(String(30), index=True)
     segment_reason: Mapped[str] = mapped_column(String(200))
+
+
+class TelegramUser(Base):
+    """A real Telegram chat linked to one synthetic customer (their demo persona)."""
+
+    __tablename__ = "telegram_users"
+    __table_args__ = (UniqueConstraint("tenant_id", "chat_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"))
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    tg_name: Mapped[str | None] = mapped_column(String(80))
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), unique=True)
+    opted_out: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OfferDecision(Base):
+    """Every decision the engine makes for a customer, including 'no offer', and what happened next."""
+
+    __tablename__ = "offer_decisions"
+    __table_args__ = (Index("ix_decisions_tenant_customer", "tenant_id", "customer_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"))
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    trigger: Mapped[str] = mapped_column(String(30))  # on_demand | event:<kind> | campaign
+    segment: Mapped[str] = mapped_column(String(30))
+    outcome: Mapped[str] = mapped_column(String(12))  # sent | no_offer | holdout | deferred
+    block_reason: Mapped[str | None] = mapped_column(String(300))
+    shortlist: Mapped[list] = mapped_column(JSON, default=list)  # eligible offer keys, best first
+    offer_key: Mapped[str | None] = mapped_column(String(40))
+    chosen_by: Mapped[str | None] = mapped_column(String(10))  # rules | ai
+    ai_rejected_reason: Mapped[str | None] = mapped_column(String(300))
+    headline: Mapped[str | None] = mapped_column(String(120))
+    terms: Mapped[str | None] = mapped_column(String(300))
+    message: Mapped[str | None] = mapped_column(Text)
+    coupon_code: Mapped[str | None] = mapped_column(String(20), unique=True)
+    category: Mapped[str | None] = mapped_column(String(30))
+    percent: Mapped[float | None] = mapped_column(Float)
+    amount_rs: Mapped[int | None] = mapped_column(Integer)
+    points: Mapped[int | None] = mapped_column(Integer)
+    min_order_value: Mapped[int | None] = mapped_column(Integer)
+    max_discount_rs: Mapped[int | None] = mapped_column(Integer)
+    liability_rs: Mapped[int] = mapped_column(Integer, default=0)
+    expected_net_rs: Mapped[float | None] = mapped_column(Float)
+    send_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    response: Mapped[str | None] = mapped_column(String(12))  # claimed | dismissed
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PointsLedger(Base):

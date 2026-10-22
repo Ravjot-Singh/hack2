@@ -89,7 +89,7 @@ class Decision:
 
 
 def _rs(v: float) -> str:
-    return f"Rs {v:,.0f}"
+    return f"₹{v:,.0f}"
 
 
 def _describe(o: Offer, cat: str, cat_label: str, pct, amount, points, max_rs, excluded, valid_until, catalog,

@@ -9,7 +9,7 @@ Built for the J-PAL South Asia Punjab Jobs AI Bootcamp, Hackathon 2.
 - **Synthetic data only**: realistic customers, orders, browsing, carts and reward points are generated locally.
 - **Multi-tenant**: each store gets its own bot, rules and catalog under `tenants/<slug>/`.
 
-> Status: Stage 4 (rules engine). Sections below grow as stages land.
+> Status: Stage 5 (Telegram bot). Sections below grow as stages land.
 
 ## Setup
 
@@ -93,6 +93,22 @@ discount paid to everyone who uses it, including people who would have bought an
 python scripts/preview_offers.py --tenant shopkart                 # what every segment would get
 python scripts/preview_offers.py --tenant shopkart --customer 17    # one customer, every decision explained
 ```
+
+## Telegram bot
+
+```bash
+python scripts/run_bot.py     # runs every tenant's bot locally (polling); needs SHOPKART_BOT_TOKEN in .env
+```
+
+In Telegram: **/start** → pick a kind of shopper (or *Surprise me*) and you're matched with a synthetic customer
+of that type → **Get my offer** → **Claim** or **Not now**. Other commands: `/profile`, `/offers`, `/switch`,
+`/stop`, `/resume`, `/help`.
+
+- Every request is recorded in `offer_decisions`, including "no offer" with the rule that stopped it.
+- The rules apply to real use too. After an offer you'll be told when the next one is allowed (48h gap, max 2 a
+  week), and `/stop` is respected immediately.
+- The offer box (discount, terms, coupon) is always generated from the rule-checked offer. Only the friendly
+  intro above it will later be written by the AI.
 
 ## Tests
 ```bash

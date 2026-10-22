@@ -37,19 +37,37 @@ every AI choice before anything is sent.
   (`load_policy(tenant_dir)` bundles rules + catalog margins + segments). Preview with
   `python scripts/preview_offers.py --tenant shopkart [--customer 17] [--at "2026-10-22 23:00"]`.
   Budget counts worst-case liability of offers sent today. Quiet hours set `send_after`, never block.
+- `app/offers/service.py` — links chats to personas, runs features → engine (real offer history + today's
+  budget) → template message → records an `offer_decisions` row for every request (incl. no_offer + reason).
+  On-demand requests re-show a live offer and ignore quiet hours (user asked).
+- `app/delivery/templates.py` — HTML texts. Offer message = intro (AI-writable later) + fixed offer box built
+  from the rule-checked Candidate (headline, terms, coupon) so the AI can never change what is offered.
+- `app/bot/` — `handlers.py` (/start persona picker, /offers, /profile, /switch, /stop, /resume, /help, Claim /
+  Not now / Stop buttons), `runner.py` (one Application per tenant with a token; webhook when PUBLIC_BASE_URL is
+  set, else polling). `POST /tg/{slug}/{secret}` checks path secret + Telegram secret header.
 - Decision pipeline (later stages): features → rules engine shortlist → holdout → Groq chooser → validator → deliver → log.
 
 ## Commands
 ```
 pip install -r requirements.txt
 alembic upgrade head                 # create/upgrade tables in DATABASE_URL (Neon)
-uvicorn app.main:app --reload        # run locally
-pytest                               # tests use a throwaway SQLite DB, never Neon or Groq
+python scripts/run_bot.py            # run all tenant bots locally (polling)
+uvicorn app.main:app --reload        # run the web app (starts bots by webhook only if PUBLIC_BASE_URL is set)
+pytest                               # tests use a throwaway SQLite DB, never Neon, Telegram or Groq
 ```
 
 ## Build stages
-1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot
-6. Agent + validator  7. Triggers & measurement  8. Dashboard  9. Deploy (Render) + README
+1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
+6. Agent + validator  7. Triggers & measurement  8. Offer tuning  9. Dashboard  10. Deploy (Render) + README
+
+### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
+- Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order
+  feels weak — e.g. bigger flat amount, % off with a cap, or free delivery + discount combo, while staying inside
+  the 10% store-wide cap (raise min order, or target a higher-cap category).
+- Review every offer's value vs. its expected_net in `scripts/preview_offers.py`; tune values, min orders,
+  validity windows and priorities in `tenants/shopkart/rules.yaml`.
+- Consider tiered values by customer value (e.g. bigger win-back for formerly high spenders).
+- Re-check message wording/appeal of templates once the AI intro (Stage 6) is in.
 
 ## Conventions
 - Python 3.11, type hints, pydantic for config/rule schemas.

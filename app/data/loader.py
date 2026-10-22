@@ -1,10 +1,11 @@
 """Writes a generated Dataset into the database for one tenant (replacing that tenant's old data)."""
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.engine import Connection
 
 from app.data.generator import Dataset
-from app.db.models import BrowseDaily, Cart, Customer, CustomerFeature, Order, OrderItem, PointsLedger, Product
+from app.db.models import BrowseDaily, Cart, Customer, CustomerFeature, OfferDecision, Order, OrderItem, \
+    PointsLedger, Product, TelegramUser
 
 # Insert order (parents first). Value = {column: parent table} for foreign keys to remap.
 TABLES = [
@@ -20,6 +21,9 @@ CHUNK = 5000
 
 
 def load_dataset(conn: Connection, tenant_id: int, ds: Dataset, progress=print) -> dict[str, int]:
+    # Customers are about to be replaced: drop their decisions and unlink chats (users /start again).
+    conn.execute(delete(OfferDecision).where(OfferDecision.tenant_id == tenant_id))
+    conn.execute(update(TelegramUser).where(TelegramUser.tenant_id == tenant_id).values(customer_id=None))
     conn.execute(delete(CustomerFeature).where(CustomerFeature.tenant_id == tenant_id))
     for model, _, _ in reversed(TABLES):
         conn.execute(delete(model).where(model.tenant_id == tenant_id))
