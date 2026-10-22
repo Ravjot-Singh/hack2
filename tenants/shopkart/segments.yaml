@@ -1,0 +1,71 @@
+# How ShopKart groups its customers.
+#
+# Groups are checked top to bottom; a customer joins the FIRST group whose conditions all hold.
+# The last group has no conditions and catches everyone else.
+#
+# Conditions use a measure name plus _min (at least) or _max (at most), e.g.
+#   orders_365_min: 4      -> "4 or more orders in the last 12 months"
+#   recency_days_min: 150  -> "last order was 150 or more days ago" (never ordered counts as very long ago)
+#
+# Measures you can use:
+#   tenure_days, recency_days, orders_30, orders_90, orders_365, monetary_365, aov,
+#   discount_share, return_rate, sessions_30, sessions_90, abandoned_carts_7d, abandoned_carts_30d,
+#   points_balance, points_expiring_30d, days_to_birthday,
+#   churn_risk, buy_anyway_prob, deal_affinity, expected_value_90d
+# Shares, risks and probabilities are between 0 and 1 (0.6 = 60%).
+
+segments:
+  - key: new
+    label: New customer
+    description: Joined in the last 60 days. Still forming habits; a good first experience matters most.
+    when:
+      tenure_days_max: 60
+
+  - key: window_shopper
+    label: Window shopper
+    description: Visits often but has bought at most once in a year. Needs a reason to finally buy.
+    when:
+      orders_365_max: 1
+      sessions_90_min: 10
+
+  - key: dormant
+    label: Dormant
+    description: >-
+      No order for 4+ months and well past their usual buying rhythm (so once-a-year shoppers are not
+      counted). Hard to win back; only worth a strong, cheap-to-us offer.
+    when:
+      recency_days_min: 120
+      churn_risk_min: 0.6
+
+  - key: at_risk
+    label: At risk
+    description: Used to buy regularly but is going quiet. The most valuable group to win back now.
+    when:
+      churn_risk_min: 0.55
+      orders_365_min: 2
+
+  - key: loyal_high_value
+    label: Loyal high-value
+    description: Big, recent, frequent spenders. Reward them; avoid giving discounts they don't need.
+    when:
+      monetary_365_min: 20000
+      orders_365_min: 8
+      recency_days_max: 60
+
+  - key: bargain_hunter
+    label: Bargain hunter
+    description: Mostly buys with a discount or in sales. Responds to deals; watch the margin.
+    when:
+      discount_share_min: 0.6
+      orders_365_min: 3
+
+  - key: regular
+    label: Regular
+    description: Buys several times a year without needing much push.
+    when:
+      orders_365_min: 4
+
+  - key: occasional
+    label: Occasional
+    description: Buys a few times a year, usually for a specific need.
+    when: {}

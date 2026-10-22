@@ -9,7 +9,7 @@ Built for the J-PAL South Asia Punjab Jobs AI Bootcamp, Hackathon 2.
 - **Synthetic data only**: realistic customers, orders, browsing, carts and reward points are generated locally.
 - **Multi-tenant**: each store gets its own bot, rules and catalog under `tenants/<slug>/`.
 
-> Status: Stage 2 (synthetic data). Sections below grow as stages land.
+> Status: Stage 3 (features & segments). Sections below grow as stages land.
 
 ## Setup
 
@@ -52,6 +52,23 @@ How it stays realistic:
 
 The report checks the result against known e-commerce patterns: top 20% of customers ≈ 65–70% of revenue,
 ≈ 70% cart abandonment, festive-season spikes.
+
+## Customer features and segments
+
+```bash
+python scripts/build_features.py --tenant shopkart
+```
+
+For every customer the engine works out, from behaviour only:
+- **What they did**: days since last order, orders in 30/90/365 days, spend, average order value, share of
+  discounted orders, return rate, visits, abandoned carts, points balance and points expiring soon, days to birthday.
+- **Churn risk**: how far past their *own* usual buying gap they are, plus how much they have slowed down.
+- **Chance of buying anyway** in the next 14 days: high means a discount would mostly be wasted margin.
+- **Deal affinity**: how often they buy with a discount.
+
+Customers are then grouped using `tenants/shopkart/segments.yaml`, a plain-language file the marketing team can
+edit: groups are checked top to bottom, each with simple conditions such as `orders_365_min: 4`. Every customer
+gets a reason, for example *"days since last order: 163 (>= 120); churn risk: 91% (>= 60%)"*.
 
 ## Tests
 ```bash

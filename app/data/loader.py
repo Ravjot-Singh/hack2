@@ -4,7 +4,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.engine import Connection
 
 from app.data.generator import Dataset
-from app.db.models import BrowseDaily, Cart, Customer, Order, OrderItem, PointsLedger, Product
+from app.db.models import BrowseDaily, Cart, Customer, CustomerFeature, Order, OrderItem, PointsLedger, Product
 
 # Insert order (parents first). Value = {column: parent table} for foreign keys to remap.
 TABLES = [
@@ -20,6 +20,7 @@ CHUNK = 5000
 
 
 def load_dataset(conn: Connection, tenant_id: int, ds: Dataset, progress=print) -> dict[str, int]:
+    conn.execute(delete(CustomerFeature).where(CustomerFeature.tenant_id == tenant_id))
     for model, _, _ in reversed(TABLES):
         conn.execute(delete(model).where(model.tenant_id == tenant_id))
 

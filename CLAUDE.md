@@ -21,8 +21,14 @@ every AI choice before anything is sent.
   table carries `tenant_id`.
 - `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →
   daily demand → orders, carts, browsing, points), `loader.py` (replaces one tenant's rows, shifts ids),
-  `summary.py` (realism report). `customers.true_segment` is ground truth for evaluation only — the offer engine
-  must never read it. Seed with `python scripts/seed.py --tenant shopkart` (~2.5 min to Neon).
+  `summary.py` (realism report). `customers.true_segment` and `customers.price_sensitivity` are hidden generator
+  traits for evaluation only — the offer engine must never read them. Seed with
+  `python scripts/seed.py --tenant shopkart` (~2.5 min to Neon).
+- `app/features/` — `customer.py` computes observed features + scores (churn_risk, buy_anyway_prob,
+  deal_affinity, expected_value_90d) via portable SQL aggregates and a FIFO points replay; `segments.py` assigns
+  segments from `tenants/<slug>/segments.yaml` (first match wins, plain-language reason); `store.py` saves the
+  `customer_features` snapshot. Rebuild with `python scripts/build_features.py --tenant shopkart` (~10 s);
+  it also prints agreement with the hidden personas (~50%: early churn is genuinely invisible in behaviour).
 - Decision pipeline (later stages): features → rules engine shortlist → holdout → Groq chooser → validator → deliver → log.
 
 ## Commands
@@ -34,7 +40,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 ```
 
 ## Build stages
-1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments  4. Rules engine  5. Telegram bot
+1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine  5. Telegram bot
 6. Agent + validator  7. Triggers & measurement  8. Dashboard  9. Deploy (Render) + README
 
 ## Conventions

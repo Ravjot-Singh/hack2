@@ -37,10 +37,11 @@ class Customer(Base):
     city_tier: Mapped[int] = mapped_column(Integer)
     device: Mapped[str] = mapped_column(String(10))
     signup_date: Mapped[date] = mapped_column(Date)
-    price_sensitivity: Mapped[float] = mapped_column(Float)
     loyalty_tier: Mapped[str] = mapped_column(String(10))
     points_balance: Mapped[int] = mapped_column(Integer)
-    # Ground-truth persona used only to evaluate segmentation; the offer engine must not read it.
+    # Hidden generator traits, kept only to evaluate segmentation. The offer engine must not read them;
+    # it works from observed behaviour (customer_features).
+    price_sensitivity: Mapped[float] = mapped_column(Float)
     true_segment: Mapped[str] = mapped_column(String(20))
 
 
@@ -117,6 +118,43 @@ class BrowseDaily(Base):
     sessions: Mapped[int] = mapped_column(Integer)
     product_views: Mapped[int] = mapped_column(Integer)
     top_category: Mapped[str] = mapped_column(String(30))
+
+
+class CustomerFeature(Base):
+    """Latest behavioural snapshot per customer: features, scores and assigned segment."""
+
+    __tablename__ = "customer_features"
+
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    tenure_days: Mapped[int] = mapped_column(Integer)
+    recency_days: Mapped[int | None] = mapped_column(Integer)
+    orders_30: Mapped[int] = mapped_column(Integer)
+    orders_90: Mapped[int] = mapped_column(Integer)
+    orders_365: Mapped[int] = mapped_column(Integer)
+    monetary_365: Mapped[int] = mapped_column(Integer)
+    aov: Mapped[int] = mapped_column(Integer)
+    discount_share: Mapped[float] = mapped_column(Float)
+    return_rate: Mapped[float] = mapped_column(Float)
+    sessions_30: Mapped[int] = mapped_column(Integer)
+    sessions_90: Mapped[int] = mapped_column(Integer)
+    abandoned_carts_7d: Mapped[int] = mapped_column(Integer)
+    abandoned_carts_30d: Mapped[int] = mapped_column(Integer)
+    last_abandoned_cart_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_abandoned_cart_value: Mapped[int | None] = mapped_column(Integer)
+    last_abandoned_cart_category: Mapped[str | None] = mapped_column(String(30))
+    top_category: Mapped[str | None] = mapped_column(String(30))
+    points_balance: Mapped[int] = mapped_column(Integer)
+    points_expiring_30d: Mapped[int] = mapped_column(Integer)
+    next_points_expiry: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    days_to_birthday: Mapped[int] = mapped_column(Integer)
+    churn_risk: Mapped[float] = mapped_column(Float)
+    buy_anyway_prob: Mapped[float] = mapped_column(Float)
+    deal_affinity: Mapped[float] = mapped_column(Float)
+    expected_value_90d: Mapped[int] = mapped_column(Integer)
+    segment: Mapped[str] = mapped_column(String(30), index=True)
+    segment_reason: Mapped[str] = mapped_column(String(200))
 
 
 class PointsLedger(Base):
