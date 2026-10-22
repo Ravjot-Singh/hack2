@@ -1,0 +1,10 @@
+# Copy this folder to tenants/<your-slug>/ to add a new store + bot.
+# The folder name must equal `slug`. Folders starting with "_" are ignored.
+slug: your-slug
+name: Your Store Name
+enabled: true
+# Name of the environment variable holding this bot's token from @BotFather.
+bot_token_env: YOUR_STORE_BOT_TOKEN
+brand_voice: friendly, warm, short sentences, a few emoji
+currency: INR
+timezone: Asia/Kolkata

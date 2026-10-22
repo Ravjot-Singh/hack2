@@ -1,0 +1,7 @@
+slug: shopkart
+name: ShopKart
+enabled: true
+bot_token_env: SHOPKART_BOT_TOKEN
+brand_voice: friendly, upbeat Indian marketplace; short sentences; 1-3 emoji; never pushy
+currency: INR
+timezone: Asia/Kolkata
