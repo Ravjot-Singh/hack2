@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     database_url: str = f"sqlite:///{ROOT_DIR / 'local.db'}"
     public_base_url: str = ""
+    # Real values come from .env / Render env vars; these placeholders are never used in production.
     webhook_secret: str = "change-me"
 
     admin_user: str = "admin"
