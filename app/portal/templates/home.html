@@ -15,7 +15,7 @@
     {% for c in checklist %}
     <li class="{{ 'done' if c.done }}">
       <span class="check {{ 'done' if c.done }}" aria-hidden="true">{{ '✓' if c.done else loop.index }}</span>
-      <div><b>{{ c.title }}</b><div class="small muted">{{ c.text }}</div></div>
+      <div><b>{% if c.href and not c.done %}<a href="{{ c.href }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</b><div class="small muted">{{ c.text }}</div></div>
     </li>
     {% endfor %}
   </ul>

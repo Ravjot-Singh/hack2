@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Data{% endblock %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Your data</h1><p>Your customers, products and orders. The offer engine works out each customer's profile and group from them.</p></div>
+</div>
+
+{% if running %}
+<div class="flash ok"><b>Importing…</b> {{ running.stage }}. This page refreshes by itself; you can keep working elsewhere.</div>
+{% endif %}
+{% if upload_error %}<div class="flash err">{{ upload_error }}</div>{% endif %}
+{% if report and not report.ok %}
+<div class="flash err" role="alert"><b>Nothing was imported: please fix these and upload again</b>
+  <ul>{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% if report.error_total > report.errors|length %}<div class="small">…and {{ "{:,}".format(report.error_total - report.errors|length) }} more.</div>{% endif %}
+</div>
+{% endif %}
+
+<div class="grid g4">
+  <div class="card tile"><div class="label">Customers</div><div class="value">{{ "{:,}".format(counts.customers) }}</div></div>
+  <div class="card tile"><div class="label">Products</div><div class="value">{{ "{:,}".format(counts.products) }}</div></div>
+  <div class="card tile"><div class="label">Orders</div><div class="value">{{ "{:,}".format(counts.orders) }}</div>
+    <div class="note">{% if first %}{{ first|dt }} to {{ last|dt }}{% else %}none yet{% endif %}</div></div>
+  <div class="card tile"><div class="label">Categories</div><div class="value">{{ catalog|length }}</div>
+    <div class="note">{% for k, v in catalog.items() %}{{ v.label }} ({{ v.margin_pct|round(0)|int }}% margin){{ ', ' if not loop.last }}{% endfor %}</div></div>
+</div>
+
+<div class="grid g2 section">
+  <div class="card">
+    <h2>Upload your data (CSV)</h2>
+    <p class="small">Export these from your store or spreadsheet. Download a template to see the columns; extra columns are ignored.</p>
+    <form method="post" action="/app/data/upload" enctype="multipart/form-data">
+      <div class="table-wrap"><table>
+        {% for name, spec in files.items() %}
+        <tr>
+          <td><b>{{ name }}.csv</b>{% if not spec.mandatory_file %} <span class="muted small">(optional)</span>{% endif %}
+            <div class="desc">{{ spec.help }}</div>
+            <div class="desc">Columns: <code>{{ spec.required|join(', ') }}</code>{% if spec.optional %}, optional <code>{{ spec.optional|join(', ') }}</code>{% endif %} · <a href="/app/data/templates/{{ name }}.csv">template</a></div></td>
+          <td><input type="file" name="{{ name }}" accept=".csv,text/csv" {{ 'required' if spec.mandatory_file }} aria-label="{{ name }}.csv"></td>
+        </tr>
+        {% endfor %}
+      </table></div>
+      <label class="small" style="display: block; margin: 10px 0"><input type="checkbox" name="confirm" value="yes">
+        I understand this <b>replaces</b> my current customers, orders and offer history.</label>
+      <button type="submit" {{ 'disabled' if running }}>Check and import</button>
+      <span class="desc">Up to {{ max_mb }} MB per file. Files are checked first; nothing changes if any row has a problem.</span>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Try it with demo data</h2>
+    <p class="small">No data to hand? Generate realistic synthetic customers with a year of orders, carts, browsing and reward points,
+      so you can explore customers, offers and deals right away.</p>
+    <form method="post" action="/app/data/demo" class="inline">
+      <label class="f">Customers
+        <select name="size">{% for n in demo_sizes %}<option value="{{ n }}" {{ 'selected' if n == 1000 }}>{{ "{:,}".format(n) }}</option>{% endfor %}</select></label>
+      <label class="small" style="flex-basis: 100%"><input type="checkbox" name="confirm" value="yes"> I understand this <b>replaces</b> my current data.</label>
+      <button type="submit" {{ 'disabled' if running }}>Generate demo data</button>
+    </form>
+    <p class="desc">Takes around half a minute for 1,000 customers.</p>
+  </div>
+</div>
+
+{% if jobs %}
+<div class="card section">
+  <h2>Recent imports</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Started</th><th>What</th><th>Status</th><th>Result</th></tr></thead>
+    <tbody>{% for j in jobs %}
+      <tr><td class="num">{{ j.created_at|dt }}</td>
+        <td>{{ 'CSV upload' if j.kind == 'upload' else 'Demo data' }}</td>
+        <td>{% if j.status == 'running' %}<span class="badge deferred">Running</span>{% elif j.status == 'done' %}<span class="badge sent">Done</span>{% else %}<span class="badge warn">Failed</span>{% endif %}</td>
+        <td class="small">
+          {% if j.status == 'done' %}{{ "{:,}".format(j.summary.get('customers', 0)) }} customers, {{ "{:,}".format(j.summary.get('orders', 0)) }} orders, {{ j.summary.get('categories', 0) }} categories.
+            {% if j.summary.get('groups') %}<div class="desc">Groups: {% for k, v in j.summary.groups.items() %}{{ segment_labels.get(k, k) }} {{ v }}{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+          {% elif j.status == 'running' %}{{ j.stage }}{% else %}{{ j.error }}{% endif %}
+          {% for w in j.summary.get('warnings', []) %}<div class="desc">⚠ {{ w }}</div>{% endfor %}
+        </td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}

@@ -51,7 +51,9 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt.replace(tzinfo=IST)
 
 
-def _next_birthday_in(birthday: date, today: date) -> int:
+def _next_birthday_in(birthday: date | None, today: date) -> int:
+    if birthday is None:  # uploaded data may not have birthdays: never "soon"
+        return 365
     for year in (today.year, today.year + 1):
         try:
             nxt = birthday.replace(year=year)

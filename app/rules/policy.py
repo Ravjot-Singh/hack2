@@ -62,16 +62,22 @@ def catalog_info(catalog: dict) -> CatalogInfo:
 
 
 def default_rules(catalog: dict) -> dict:
-    """The demo store's rules, adapted to another catalog: caps for its categories (kept from the template when
-    the category exists there, else ~60% of margin) and fixed-category offers moved to the whole store."""
-    data = yaml.safe_load((TEMPLATE_DIR / "rules.yaml").read_text(encoding="utf-8"))
-    template_caps = data["limits"]["max_discount_pct"]
+    """The demo store's rules, adapted to another catalog."""
+    return adapt_rules(yaml.safe_load((TEMPLATE_DIR / "rules.yaml").read_text(encoding="utf-8")), catalog)
+
+
+def adapt_rules(rules_data: dict, catalog: dict) -> dict:
+    """Fit rules to a (new) catalog: a discount cap per category (kept when it already exists and is below the
+    margin, else ~60% of margin), caps for categories that no longer exist removed, the store-wide cap kept
+    below every margin, and offers tied to a missing category moved to the whole store."""
+    data = copy.deepcopy(rules_data)
+    old_caps = data["limits"]["max_discount_pct"]
     caps = {}
     for cat, info in catalog.items():
         margin = float(info["margin_pct"])
-        caps[cat] = min(template_caps.get(cat, round(margin * DEFAULT_CAP_SHARE_OF_MARGIN)), margin)
+        caps[cat] = min(old_caps.get(cat, round(margin * DEFAULT_CAP_SHARE_OF_MARGIN)), margin)
     max_margin = max((float(v["margin_pct"]) for v in catalog.values()), default=0)
-    caps["any"] = min(template_caps["any"], max_margin)
+    caps["any"] = min(old_caps.get("any", 10), max_margin)
     data["limits"]["max_discount_pct"] = caps
     for offer in data["offers"]:
         for key in ("category", "fallback_category"):

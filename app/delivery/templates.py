@@ -76,8 +76,10 @@ def profile_card(cust: dict, f: dict, seg_label: str, seg_description: str, cate
     cat = lambda k: category_labels.get(k, k)  # noqa: E731
     lines = [
         "👤 <b>Your shopper profile</b> <i>(synthetic)</i>",
-        f"<b>{escape(cust['name'])}</b> · {escape(cust['city'])} · {cust['age']} yrs · "
-        f"{escape(cust['loyalty_tier'].title())} member",
+        " · ".join([f"<b>{escape(cust['name'])}</b>"]
+                   + ([escape(cust["city"])] if cust.get("city") else [])
+                   + ([f"{cust['age']} yrs"] if cust.get("age") else [])
+                   + [f"{escape(cust['loyalty_tier'].title())} member"]),
         "",
         f"🏷 <b>{escape(seg_label)}</b>: {escape(seg_description)}",
         "",

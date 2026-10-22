@@ -1,10 +1,11 @@
-"""Writes a generated Dataset into the database for one tenant (replacing that tenant's old data)."""
+"""Writes a Dataset (generated, or built from uploaded CSVs) into the database for one business, replacing
+that business's old data. Dataset rows use 1-based local ids; they are shifted past existing ids here."""
 
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.engine import Connection
 
 from app.data.generator import Dataset
-from app.db.models import BrowseDaily, Cart, Customer, CustomerFeature, OfferDecision, OfferOutcome, Order, \
+from app.db.models import BrowseDaily, Cart, Customer, CustomerFeature, Deal, OfferDecision, OfferOutcome, Order, \
     OrderItem, PointsLedger, Product, TelegramUser
 
 # Insert order (parents first). Value = {column: parent table} for foreign keys to remap.
@@ -21,9 +22,13 @@ CHUNK = 5000
 
 
 def load_dataset(conn: Connection, tenant_id: int, ds: Dataset, progress=print) -> dict[str, int]:
-    # Customers are about to be replaced: drop their decisions and unlink chats (users /start again).
+    if conn.dialect.name == "postgresql":
+        # Ids below are computed as max(id) + n, so two businesses importing at once must not interleave.
+        conn.execute(text("select pg_advisory_xact_lock(424242)"))
+    # Customers are about to be replaced: drop their decisions/deals and unlink chats (users /start again).
     conn.execute(delete(OfferOutcome).where(OfferOutcome.tenant_id == tenant_id))
     conn.execute(delete(OfferDecision).where(OfferDecision.tenant_id == tenant_id))
+    conn.execute(delete(Deal).where(Deal.tenant_id == tenant_id))
     conn.execute(update(TelegramUser).where(TelegramUser.tenant_id == tenant_id).values(customer_id=None))
     conn.execute(delete(CustomerFeature).where(CustomerFeature.tenant_id == tenant_id))
     for model, _, _ in reversed(TABLES):

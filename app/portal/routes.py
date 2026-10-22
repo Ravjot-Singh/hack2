@@ -127,7 +127,7 @@ def home(request: Request, biz: Business = Depends(current_business), welcome: i
                         for d in s.scalars(select(Deal).where(Deal.tenant_id == biz.tenant_id)
                                            .order_by(Deal.id.desc()).limit(3))]
     checklist = [
-        {"done": stats["customers"] > 0, "title": "Add your customer data",
+        {"done": stats["customers"] > 0, "title": "Add your customer data", "href": "/app/data",
          "text": "Upload your customers, products and orders as CSV files, or start with demo data."},
         {"done": bool(biz.tenant.bot_token), "title": "Connect your Telegram bot",
          "text": "Create a bot with @BotFather and paste its token, so customers can receive offers."},

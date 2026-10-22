@@ -183,6 +183,11 @@ being built in phases. Available now:
   background; the deal page shows progress, claims, the result against the control group, and a CSV of coupons
   for customers you'll reach through your own channels.
 - **Activity**: every decision, filterable by result.
+- **Data**: upload your customers, products, orders and order items as CSV files (plus optional abandoned carts
+  and reward points). Templates with example rows are provided. Files are checked first: any problem is
+  listed with its file and row number, and nothing changes until everything passes. Or generate realistic demo
+  data in one click. After an import your categories and margins, offer rules and customer groups update
+  automatically.
 
 To give the ShopKart demo store a login (you'll be asked for a password):
 

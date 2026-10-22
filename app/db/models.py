@@ -228,6 +228,22 @@ class Deal(Base):
     error: Mapped[str | None] = mapped_column(String(300))
 
 
+class ImportJob(Base):
+    """A data import (uploaded CSVs or generated demo data) running in the background for one business."""
+
+    __tablename__ = "import_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # upload | demo
+    status: Mapped[str] = mapped_column(String(12))  # running | done | failed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stage: Mapped[str | None] = mapped_column(String(80))
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(String(300))
+
+
 class OfferDecision(Base):
     """Every decision the engine makes for a customer, including 'no offer', and what happened next."""
 

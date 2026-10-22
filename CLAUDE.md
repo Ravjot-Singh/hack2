@@ -42,6 +42,12 @@ every AI choice before anything is sent.
   coupons CSV). Personalisation: favourite / whole store / chosen categories, % capped per category; frequency
   limits and margin guards apply; the deal budget replaces the daily budget (best expected value first).
   Activity page (`/app/activity`) shares `_feed.html` with Home.
+  Data (`/app/data`, `app/ingest/`): `csv_import.parse_files` checks customers/products/orders/order_items
+  (+ optional carts/points) CSVs, reporting errors as `file.csv row N` (header = row 1) and writing nothing unless
+  all pass; builds a `Dataset` + catalog (category keys slugified, margins averaged from `margin_pct`, else kept /
+  25% default with a warning). `jobs.py` runs uploads and demo data (`generate` with the business's prefix) as
+  background `ImportJob`s: `load_dataset` (Postgres advisory lock; also clears the business's deals/decisions),
+  tenant catalog + `config_version` bump, saved rules re-fitted with `policy.adapt_rules`, then features.
 - `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →
   daily demand → orders, carts, browsing, points), `loader.py` (replaces one tenant's rows, shifts ids),
   `summary.py` (realism report). `customers.true_segment` and `customers.price_sensitivity` are hidden generator
@@ -112,7 +118,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
 6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅
 Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers ✅
-P3 deals ✅  P4 data upload  P5 settings  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
+P3 deals ✅  P4 data upload ✅  P5 settings  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order
