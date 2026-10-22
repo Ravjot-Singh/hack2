@@ -73,6 +73,20 @@ def run_demo(job_id: int, tenant_id: int, slug: str, prefix: str, size: int, now
     _finish(job_id, work, now_fn)
 
 
+def run_regroup(job_id: int, tenant_id: int, slug: str, now_fn) -> None:
+    """Customer groups were edited: re-assign every customer."""
+    def work() -> dict:
+        _stage(job_id, "Re-assigning customers to groups")
+        policy = current_policy(slug)
+        with get_engine().begin() as conn:
+            rows = refresh_features(conn, tenant_id, now_fn(), policy.segments)
+        groups: dict[str, int] = {}
+        for r in rows:
+            groups[r["segment"]] = groups.get(r["segment"], 0) + 1
+        return {"customers": len(rows), "groups": groups}
+    _finish(job_id, work, now_fn)
+
+
 def _finish(job_id: int, work, now_fn) -> None:
     try:
         summary = work()

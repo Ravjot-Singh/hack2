@@ -48,6 +48,14 @@ every AI choice before anything is sent.
   25% default with a warning). `jobs.py` runs uploads and demo data (`generate` with the business's prefix) as
   background `ImportJob`s: `load_dataset` (Postgres advisory lock; also clears the business's deals/decisions),
   tenant catalog + `config_version` bump, saved rules re-fitted with `policy.adapt_rules`, then features.
+  Settings (`/app/settings`, `portal/settings_routes.py`): profile + brand voice; Telegram bot (format check →
+  `verify_bot_token` getMe → refuse a bot already used by another business → Fernet-encrypt → `BotManager.sync`);
+  categories & margins (saved rules re-fitted so caps stay below margins, operator told what changed); offer
+  rules editor (shared `app/rules/forms.py` with /admin); customer-groups editor (thresholds/labels → tenant
+  `segments_yaml`, `config_version` bump, background `regroup` job). Results (`/app/results`): measure() with
+  `include_simulated=False` (dev simulations excluded), by deal / offer / group.
+- `app/bot/runner.py` — `BotManager.sync()` starts/restarts/stops one bot per business to match current tokens;
+  web app (webhook mode) syncs after token changes; `scripts/run_bot.py` (polling) re-syncs every 30 s.
 - `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →
   daily demand → orders, carts, browsing, points), `loader.py` (replaces one tenant's rows, shifts ids),
   `summary.py` (realism report). `customers.true_segment` and `customers.price_sensitivity` are hidden generator
@@ -118,7 +126,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
 6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅
 Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers ✅
-P3 deals ✅  P4 data upload ✅  P5 settings  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
+P3 deals ✅  P4 data upload ✅  P5 settings ✅  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order

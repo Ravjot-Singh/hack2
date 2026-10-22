@@ -28,6 +28,7 @@ from app.measurement.metrics import measure
 from app.offers import service
 from app.offers.campaign import run_simulated_campaign
 from app.rules.engine import CustomerContext, evaluate
+from app.rules.forms import friendly_errors, rules_form_data
 from app.rules.policy import TenantPolicy, current_policy, default_rules, save_rules
 from app.rules.schema import RulesError
 from app.tenants.registry import TenantConfig, get_tenants
@@ -177,44 +178,6 @@ def customer(request: Request, customer_id: int, ctx: Ctx = Depends(get_ctx)):
 
 # ---- rules ----
 
-def _rules_form_data(form, base: dict) -> dict:
-    data = yaml.safe_load(yaml.safe_dump(base))  # deep copy
-    lim = data["limits"]
-    for key in ("max_discount_rs_per_offer", "max_offers_per_customer_per_week", "min_hours_between_offers",
-                "same_offer_cooldown_days", "daily_budget_rs", "min_expected_net_rs", "delivery_fee_rs"):
-        if form.get(f"limits.{key}") not in (None, ""):
-            lim[key] = int(float(form.get(f"limits.{key}")))
-    for key in ("max_buy_anyway_prob_for_discounts", "max_return_rate_for_discounts"):
-        if form.get(f"limits.{key}") not in (None, ""):
-            lim[key] = float(form.get(f"limits.{key}")) / 100  # entered as %
-    for cat in list(lim["max_discount_pct"]):
-        if form.get(f"cap.{cat}") not in (None, ""):
-            lim["max_discount_pct"][cat] = float(form.get(f"cap.{cat}"))
-    lim["quiet_hours"] = {"start": form.get("quiet.start") or lim["quiet_hours"]["start"],
-                          "end": form.get("quiet.end") or lim["quiet_hours"]["end"]}
-    if form.get("holdout_pct") not in (None, ""):
-        data["measurement"]["holdout_pct"] = float(form.get("holdout_pct"))
-    for o in data["offers"]:
-        k = o["key"]
-        o["enabled"] = form.get(f"offer.{k}.enabled") == "on"
-        for field, cast in (("value", float), ("min_order_value", int), ("max_discount_rs", int),
-                            ("valid_hours", int), ("priority", int)):
-            raw = form.get(f"offer.{k}.{field}")
-            if raw not in (None, ""):
-                o[field] = cast(float(raw))
-        segs = form.getlist(f"offer.{k}.segments")
-        o["segments"] = segs or o["segments"]
-    return data
-
-
-def _friendly(exc: Exception) -> list[str]:
-    if isinstance(exc, ValidationError):
-        return [f"{' > '.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()]
-    if isinstance(exc, RulesError):
-        return [line[2:] for line in str(exc).splitlines()[1:]]
-    return [str(exc)]
-
-
 @router.get("/rules", response_class=HTMLResponse)
 def rules(request: Request, ctx: Ctx = Depends(get_ctx), saved: int = 0):
     with session_scope() as s:
@@ -228,12 +191,12 @@ async def rules_save(request: Request, ctx: Ctx = Depends(get_ctx), user: str = 
     form = await request.form()
     data = ctx.policy.rules.model_dump(mode="json")
     try:
-        data = _rules_form_data(form, data)
+        data = rules_form_data(form, data)
         save_rules(ctx.tenant.slug, ctx.tenant_id, ctx.tenant.path, data, user, form.get("note"), _now())
     except (ValidationError, RulesError, ValueError) as exc:
         with session_scope() as s:
             history = queries.rules_history(s, ctx.tenant_id)
-        return render(request, "rules.html", ctx, "rules", data=data, errors=_friendly(exc), saved=0,
+        return render(request, "rules.html", ctx, "rules", data=data, errors=friendly_errors(exc), saved=0,
                       history=history)
     return RedirectResponse(f"/admin/rules?t={ctx.tenant.slug}&saved=1", status_code=303)
 

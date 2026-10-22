@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
+{% macro bar(c, dom) -%}
+  {%- set ci = c.ci95 if c.ci95 == c.ci95 else 0 -%}
+  {%- set xu = 100 + 100 * c.uplift / dom -%}
+  <svg class="uplift" viewBox="0 0 200 22" preserveAspectRatio="none" role="img" aria-label="{{ '%+.1f'|format(c.uplift * 100) }} points">
+    <title>{{ '%+.1f'|format(c.uplift * 100) }} points (95% range {{ '%+.1f'|format((c.uplift - ci) * 100) }} to {{ '%+.1f'|format((c.uplift + ci) * 100) }})</title>
+    <line x1="100" x2="100" y1="0" y2="22" stroke="var(--axis)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <rect x="{{ [100, xu]|min }}" y="7" width="{{ ([100, xu]|max) - ([100, xu]|min) }}" height="8" rx="1.5" fill="{{ 'var(--series-1)' if c.uplift >= 0 else 'var(--neg)' }}"/>
+    {% if ci %}<line x1="{{ [0, 100 + 100 * (c.uplift - ci) / dom]|max }}" x2="{{ [200, 100 + 100 * (c.uplift + ci) / dom]|min }}" y1="11" y2="11" stroke="var(--ink-2)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>{% endif %}
+  </svg>
+{%- endmacro %}
+{% macro table(items, labels, dom, first_col) %}
+<div class="table-wrap"><table>
+  <thead><tr><th>{{ first_col }}</th><th class="num">Got an offer</th><th class="num">Control group</th><th class="num">Bought (offer)</th>
+    <th class="num">Bought (control)</th><th style="width: 170px">Difference</th><th class="num">Extra profit</th><th class="num">₹ back per ₹1</th></tr></thead>
+  <tbody>{% for key, c in items %}{% if c.treat.n %}
+    <tr><td>{{ labels.get(key, key) }}</td><td class="num">{{ "{:,}".format(c.treat.n) }}</td><td class="num">{{ "{:,}".format(c.hold.n) }}</td>
+      <td class="num">{{ c.treat.conv|pct(1) }}</td><td class="num">{{ c.hold.conv|pct(1) if c.hold.n else '–' }}</td>
+      <td>{% if c.hold.n %}{{ bar(c, dom) }}<div class="desc">{{ '%+.1f'|format(c.uplift * 100) }} pts{{ ' ✓' if c.significant }}</div>{% else %}<span class="desc">no control group yet</span>{% endif %}</td>
+      <td class="num">{{ c.incremental_profit|rs if c.hold.n else '–' }}</td>
+      <td class="num">{{ '%.2f'|format(c.return_per_rs) if (c.hold.n and c.return_per_rs == c.return_per_rs) else '–' }}</td></tr>
+  {% endif %}{% endfor %}</tbody>
+</table></div>
+{% endmacro %}
+{% block content %}
+{% set o = report.overall %}{% set lv = report.live %}
+<div class="page-head">
+  <div><h1>Results</h1><p>What your offers achieved. Each result compares customers who got an offer with a <b>control group</b>
+    of similar customers who were held back on purpose. The difference is what the offers really added.</p></div>
+</div>
+
+<div class="grid g4">
+  <div class="card tile"><div class="label">Offers sent</div><div class="value">{{ "{:,}".format(lv.get('outcome_sent', 0)) }}</div>
+    <div class="note">{{ lv.get('outcome_holdout', 0) }} customers held back as control group</div></div>
+  <div class="card tile"><div class="label">Claimed on Telegram</div><div class="value">{{ lv.get('claimed', 0) }}</div>
+    <div class="note">{% if lv.get('outcome_sent') %}{{ (lv.get('claimed', 0) / lv.outcome_sent)|pct }} of offers sent{% endif %} · {{ lv.get('dismissed', 0) }} said "not now"</div></div>
+  <div class="card tile"><div class="label">Bought with an offer</div><div class="value">{{ o.treat.conv|pct(1) if o.treat.n else '–' }}</div>
+    <div class="note">{% if o.hold.n %}vs {{ o.hold.conv|pct(1) }} in the control group{% else %}needs measured purchases{% endif %}</div></div>
+  <div class="card tile"><div class="label">Extra profit after discounts</div><div class="value">{{ o.incremental_profit|rs if o.hold.n else '–' }}</div>
+    <div class="note">{% if o.hold.n %}{{ '%+.1f'|format(o.uplift * 100) }} pts{% if o.significant %}, a clear effect{% else %}, not yet clear (could be chance){% endif %}{% endif %}</div></div>
+</div>
+
+{% if not o.treat.n %}
+<div class="card section"><p>No measured purchases yet. Results appear here once deals have run{% if not lv.get('decisions') %} and customers have received offers{% endif %}.
+  Purchases are measured from your order data; for demo data they are simulated.</p></div>
+{% else %}
+{% set ns = namespace(dom=0.02) %}
+{% for c in (report.by_offer.values()|list) + (report.by_segment.values()|list) + (deals|map(attribute='report')|list) %}{% if c.hold.n %}{% set ns.dom = [ns.dom, (c.uplift|abs) * 1.25]|max %}{% endif %}{% endfor %}
+
+{% if deals %}
+<div class="card section">
+  <h2>By deal</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Deal</th><th class="num">Got it</th><th class="num">Control group</th><th class="num">Bought (deal)</th><th class="num">Bought (control)</th><th style="width: 170px">Difference</th><th class="num">Extra profit</th><th class="num">Claimed</th></tr></thead>
+    <tbody>{% for d in deals %}{% set c = d.report %}
+      <tr><td><a href="/app/deals/{{ d.id }}">{{ d.name }}</a><div class="desc">{{ d.finished_at|dt }}</div></td>
+        <td class="num">{{ "{:,}".format(c.treat.n) }}</td><td class="num">{{ "{:,}".format(c.hold.n) }}</td>
+        <td class="num">{{ c.treat.conv|pct(1) if c.treat.n else '–' }}</td><td class="num">{{ c.hold.conv|pct(1) if c.hold.n else '–' }}</td>
+        <td>{% if c.hold.n and c.treat.n %}{{ bar(c, ns.dom) }}<div class="desc">{{ '%+.1f'|format(c.uplift * 100) }} pts{{ ' ✓' if c.significant }}</div>{% else %}<span class="desc">–</span>{% endif %}</td>
+        <td class="num">{{ c.incremental_profit|rs if c.hold.n else '–' }}</td><td class="num">{{ d.claimed }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<div class="card section">
+  <h2>By offer</h2>
+  {{ table(report.by_offer.items()|sort(attribute='1.treat.n', reverse=true), offer_labels, ns.dom, 'Offer') }}
+</div>
+<div class="card section">
+  <h2>By customer group</h2>
+  {{ table(report.by_segment.items()|sort(attribute='1.treat.n', reverse=true), segment_labels, ns.dom, 'Group') }}
+  <p class="desc">Blue bars: offers helped; red: fewer purchases than the control group. The thin line shows the 95% range;
+    if it crosses the middle, the difference could be chance. ✓ marks a clear effect.</p>
+</div>
+{% if simulated %}<p class="desc">Purchases by demo-data customers are simulated, so you can see how results will look.</p>{% endif %}
+{% endif %}
+{% endblock %}

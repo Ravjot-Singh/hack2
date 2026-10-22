@@ -69,10 +69,11 @@
     <thead><tr><th>Started</th><th>What</th><th>Status</th><th>Result</th></tr></thead>
     <tbody>{% for j in jobs %}
       <tr><td class="num">{{ j.created_at|dt }}</td>
-        <td>{{ 'CSV upload' if j.kind == 'upload' else 'Demo data' }}</td>
+        <td>{{ {'upload': 'CSV upload', 'demo': 'Demo data', 'regroup': 'Regrouping customers'}.get(j.kind, j.kind) }}</td>
         <td>{% if j.status == 'running' %}<span class="badge deferred">Running</span>{% elif j.status == 'done' %}<span class="badge sent">Done</span>{% else %}<span class="badge warn">Failed</span>{% endif %}</td>
         <td class="small">
-          {% if j.status == 'done' %}{{ "{:,}".format(j.summary.get('customers', 0)) }} customers, {{ "{:,}".format(j.summary.get('orders', 0)) }} orders, {{ j.summary.get('categories', 0) }} categories.
+          {% if j.status == 'done' and j.kind == 'regroup' %}{{ "{:,}".format(j.summary.get('customers', 0)) }} customers re-assigned.
+          {% elif j.status == 'done' %}{{ "{:,}".format(j.summary.get('customers', 0)) }} customers, {{ "{:,}".format(j.summary.get('orders', 0)) }} orders, {{ j.summary.get('categories', 0) }} categories.
             {% if j.summary.get('groups') %}<div class="desc">Groups: {% for k, v in j.summary.groups.items() %}{{ segment_labels.get(k, k) }} {{ v }}{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
           {% elif j.status == 'running' %}{{ j.stage }}{% else %}{{ j.error }}{% endif %}
           {% for w in j.summary.get('warnings', []) %}<div class="desc">⚠ {{ w }}</div>{% endfor %}

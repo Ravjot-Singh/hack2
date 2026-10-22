@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Customer groups{% endblock %}
+{% block content %}
+{% include "_settings_tabs.html" %}
+<p class="small muted">Every customer is placed in one group, based on what they actually do. Groups are checked from top to
+bottom and a customer joins the first one that fits. Offers and deals can target groups.</p>
+{% if errors %}<div class="flash err" role="alert"><b>Not saved: please fix these first</b><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+
+<form method="post" action="/app/settings/groups">
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Group</th><th>Who belongs here</th><th class="num">Customers</th></tr></thead>
+    <tbody>
+    {% for g in groups %}{% set k = g.key %}
+    <tr>
+      <td class="num">{{ loop.index }}</td>
+      <td style="min-width: 220px"><input name="g.{{ k }}.label" value="{{ g.label }}" maxlength="40" aria-label="Group name">
+        <textarea name="g.{{ k }}.description" rows="2" style="width: 100%; margin-top: 6px" aria-label="Description">{{ g.description }}</textarea></td>
+      <td>
+        {% if g.when %}{% for cond, v in g.when.items() %}{% set lbl, how = condition_text(cond) %}{% set pct = cond.rpartition('_')[0] in percent_measures %}
+          <div class="small" style="margin: 4px 0">{{ lbl|capitalize }} {{ how }}
+            <span class="numf"><input type="number" name="g.{{ k }}.when.{{ cond }}" value="{{ ((v * 100)|round(1)) if pct else v }}" step="any">{% if pct %}<span class="muted">%</span>{% endif %}</span>
+            {% if not loop.last %}<span class="muted">and</span>{% endif %}</div>
+        {% endfor %}{% else %}<span class="small muted">Everyone else</span>{% endif %}
+      </td>
+      <td class="num">{{ "{:,}".format(counts.get(k, 0)) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div style="display: flex; gap: 8px; margin-top: 12px">
+    <button type="submit">Save and regroup customers</button>
+  </div>
+</div>
+</form>
+<form method="post" action="/app/settings/groups/reset" class="section" onsubmit="return confirm('Reset all groups to the defaults?')">
+  <button class="secondary" type="submit">Reset groups to defaults</button></form>
+{% endblock %}

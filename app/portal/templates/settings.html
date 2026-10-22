@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+{% include "_settings_tabs.html" %}
+<div class="grid g2">
+  <div class="card">
+    <h2>Your business</h2>
+    <form method="post" action="/app/settings/profile" style="display: grid; gap: 12px">
+      <label class="f">Business name<input name="name" value="{{ tenant.name }}" maxlength="120" required></label>
+      <label class="f">Brand voice <span class="desc">How offer messages should sound (used when the AI writes them)</span>
+        <input name="brand_voice" value="{{ tenant.brand_voice }}" maxlength="200"></label>
+      <div class="small muted">Coupon codes and demo customer IDs start with <b>{{ tenant.prefix }}</b>.</div>
+      <div><button type="submit">Save</button></div>
+    </form>
+  </div>
+
+  <div class="card" id="bot">
+    <h2>Telegram bot</h2>
+    {% if tenant.bot_username %}
+      <p><span class="badge sent">Connected</span> <b>@{{ tenant.bot_username }}</b></p>
+      <p class="small">Share <a href="https://t.me/{{ tenant.bot_username }}" target="_blank" rel="noopener">t.me/{{ tenant.bot_username }}</a>
+        with your customers (website, receipts, SMS). Offers reach them once they press <b>Start</b>.</p>
+      <form method="post" action="/app/settings/bot/disconnect" onsubmit="return confirm('Disconnect this bot? Customers will stop receiving offers on Telegram.')">
+        <button class="secondary" type="submit">Disconnect</button></form>
+      <details class="section small"><summary>Use a different bot</summary>
+        <form method="post" action="/app/settings/bot" class="inline section">
+          <label class="f" style="flex: 1">New bot token<input name="token" autocomplete="off" placeholder="123456789:AAH..."></label>
+          <button type="submit">Connect</button></form>
+      </details>
+    {% elif env_bot %}
+      <p><span class="badge sent">Connected</span> The bot for this store is set up on the server.</p>
+      <details class="small"><summary>Connect your own bot instead</summary>
+        <form method="post" action="/app/settings/bot" class="inline section">
+          <label class="f" style="flex: 1">Bot token<input name="token" autocomplete="off" placeholder="123456789:AAH..."></label>
+          <button type="submit">Connect</button></form>
+      </details>
+    {% else %}
+      <p class="small">Customers receive offers through your own Telegram bot.</p>
+      <ol class="small" style="padding-left: 18px; line-height: 1.8">
+        <li>In Telegram, open <b>@BotFather</b> and send <code>/newbot</code>.</li>
+        <li>Choose a name and a username for your bot.</li>
+        <li>Copy the token BotFather gives you and paste it here.</li>
+      </ol>
+      <form method="post" action="/app/settings/bot" class="inline">
+        <label class="f" style="flex: 1">Bot token<input name="token" autocomplete="off" placeholder="123456789:AAH..." required></label>
+        <button type="submit">Connect bot</button>
+      </form>
+      <p class="desc">The token is checked with Telegram and stored encrypted.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card section" id="categories">
+  <h2>Categories & margins</h2>
+  <p class="small muted">Your gross margin per category. Discounts are always kept below it, so no offer sells at a loss.
+    Categories come from your products; upload new data to change them.</p>
+  {% if catalog %}
+  <form method="post" action="/app/settings/categories">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Category</th><th>Margin</th><th>Discount limit</th></tr></thead>
+      <tbody>{% for key, info in catalog.items() %}
+        <tr><td><input name="label.{{ key }}" value="{{ info.label }}" maxlength="40"></td>
+          <td><span class="numf"><input type="number" name="margin.{{ key }}" value="{{ info.margin_pct|round(1) }}" min="1" max="95" step="0.5"><span class="muted small">%</span></span></td>
+          <td class="small">{{ caps.get(key, caps['any'])|round(1) }}% <span class="muted">· change in <a href="/app/settings/rules">Offer rules</a></span></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <button type="submit">Save margins</button>
+  </form>
+  {% else %}<p class="muted">No categories yet. <a href="/app/data">Add your data</a>.</p>{% endif %}
+</div>
+{% endblock %}

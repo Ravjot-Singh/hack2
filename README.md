@@ -188,6 +188,15 @@ being built in phases. Available now:
   listed with its file and row number, and nothing changes until everything passes. Or generate realistic demo
   data in one click. After an import your categories and margins, offer rules and customer groups update
   automatically.
+- **Results**: what your offers and deals added compared with the control group, by deal, offer and customer
+  group, plus Telegram claims.
+- **Settings**:
+  - **Telegram bot**: create one with @BotFather and paste the token. It's checked with Telegram, stored
+    encrypted, and starts automatically; share `t.me/<your bot>` with customers.
+  - **Business profile**: your name, and the brand voice the AI writes in.
+  - **Categories & margins**: edit them; discount limits are lowered automatically to stay below margins.
+  - **Offer rules**: every limit and automatic offer in plain language, with change history.
+  - **Customer groups**: edit the thresholds and names; customers are regrouped in the background.
 
 To give the ShopKart demo store a login (you'll be asked for a password):
 

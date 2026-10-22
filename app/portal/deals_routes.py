@@ -193,6 +193,28 @@ def deal_coupons(deal_id: int, biz: Business = Depends(current_business)):
                              headers={"Content-Disposition": f'attachment; filename="{filename}-coupons.csv"'})
 
 
+# ---- results ----
+
+@router.get("/results", response_class=HTMLResponse)
+def results(request: Request, biz: Business = Depends(current_business)):
+    with session_scope() as s:
+        deals = s.scalars(select(Deal).where(Deal.tenant_id == biz.tenant_id, Deal.status == "done")
+                          .order_by(Deal.id.desc())).all()
+        deal_rows = [{"id": d.id, "name": d.name, "progress": d.progress or {}, "finished_at": d.finished_at}
+                     for d in deals]
+        claims = dict(s.execute(select(OfferDecision.deal_id, func.count()).where(
+            OfferDecision.tenant_id == biz.tenant_id, OfferDecision.response == "claimed",
+            OfferDecision.deal_id.is_not(None)).group_by(OfferDecision.deal_id)).all())
+    with get_engine().connect() as conn:
+        report = measure(conn, biz.tenant_id, include_simulated=False)
+        for row in deal_rows:
+            row["report"] = measure(conn, biz.tenant_id, deal_id=row["id"]).overall
+            row["claimed"] = claims.get(row["id"], 0)
+    simulated = any(r["progress"].get("simulated") for r in deal_rows)
+    return base.page(request, "results.html", biz, "results", report=report, deals=deal_rows, simulated=simulated,
+                     **base._labels(biz))
+
+
 # ---- activity ----
 
 @router.get("/activity", response_class=HTMLResponse)

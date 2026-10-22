@@ -13,12 +13,13 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from telegram import Update
 
-from app.bot.runner import build_bots, start_bots, stop_bots
+from app.bot.runner import BotManager
 from app.config import get_settings
 from app.dashboard.routes import STATIC_DIR, router as dashboard_router
 from app.portal.data_routes import router as portal_data_router
 from app.portal.deals_routes import router as portal_deals_router
 from app.portal.routes import router as portal_router
+from app.portal.settings_routes import router as portal_settings_router
 from starlette.middleware.sessions import SessionMiddleware
 from app.db.session import get_engine, session_scope
 from app.ingest.jobs import mark_interrupted_jobs
@@ -32,18 +33,21 @@ log = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.bots = {}
+    app.state.bot_manager = None
     try:
         with session_scope() as s:
-            sync_tenants(s, get_tenants())
+            sync_tenants(s)
         mark_interrupted_deals()
         mark_interrupted_jobs()
     except Exception as exc:  # app should still boot so /health can report the problem
         log.warning("Could not sync tenants to database: %s", exc)
-    if settings.public_base_url:
-        app.state.bots = build_bots(webhook=True)
-        await start_bots(app.state.bots, settings.public_base_url, settings.webhook_secret)
+    if settings.public_base_url:  # public server: this process runs every business's bot by webhook
+        manager = BotManager(settings.public_base_url, settings.webhook_secret)
+        app.state.bot_manager, app.state.bots = manager, manager.apps
+        await manager.sync()
     yield
-    await stop_bots(app.state.bots)
+    if app.state.bot_manager:
+        await app.state.bot_manager.stop_all()
 
 
 app = FastAPI(title="Personalised Offer Engine", lifespan=lifespan)
@@ -55,6 +59,7 @@ app.include_router(dashboard_router)
 app.include_router(portal_router)
 app.include_router(portal_deals_router)
 app.include_router(portal_data_router)
+app.include_router(portal_settings_router)
 
 
 @app.get("/", include_in_schema=False)

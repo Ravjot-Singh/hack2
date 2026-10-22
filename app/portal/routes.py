@@ -129,9 +129,9 @@ def home(request: Request, biz: Business = Depends(current_business), welcome: i
     checklist = [
         {"done": stats["customers"] > 0, "title": "Add your customer data", "href": "/app/data",
          "text": "Upload your customers, products and orders as CSV files, or start with demo data."},
-        {"done": bool(biz.tenant.bot_token), "title": "Connect your Telegram bot",
+        {"done": bool(biz.tenant.bot_token), "title": "Connect your Telegram bot", "href": "/app/settings#bot",
          "text": "Create a bot with @BotFather and paste its token, so customers can receive offers."},
-        {"done": rules_edited, "title": "Review your offer rules",
+        {"done": rules_edited, "title": "Review your offer rules", "href": "/app/settings/rules",
          "text": "Discount limits, budget and how often a customer may hear from you. Sensible defaults are set."},
     ]
     return page(request, "home.html", biz, "home", stats=stats, feed=feed, checklist=checklist, deals=recent_deals,

@@ -90,7 +90,9 @@ class Report:
     live: dict
 
 
-def measure(conn: Connection, tenant_id: int, since: datetime | None = None, deal_id: int | None = None) -> Report:
+def measure(conn: Connection, tenant_id: int, since: datetime | None = None, deal_id: int | None = None,
+            include_simulated: bool = True) -> Report:
+    """include_simulated=False leaves out developer campaign simulations (decisions flagged simulated)."""
     q = (select(OfferDecision.outcome, OfferDecision.shortlist, OfferDecision.segment, OfferDecision.expected_net_rs,
                 OfferOutcome.purchased, OfferOutcome.redeemed, OfferOutcome.order_value, OfferOutcome.margin_rs,
                 OfferOutcome.discount_cost)
@@ -100,6 +102,8 @@ def measure(conn: Connection, tenant_id: int, since: datetime | None = None, dea
         q = q.where(OfferDecision.created_at >= since)
     if deal_id is not None:
         q = q.where(OfferDecision.deal_id == deal_id)
+    if not include_simulated:
+        q = q.where(OfferDecision.simulated.is_(False))
     overall = Comparison("all offers")
     by_offer: dict[str, Comparison] = defaultdict(lambda: Comparison(""))
     by_seg: dict[str, Comparison] = defaultdict(lambda: Comparison(""))
