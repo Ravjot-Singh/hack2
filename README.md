@@ -166,8 +166,14 @@ Simulated decisions never count toward real users' limits or the live budget, an
 ## Operator portal (for businesses)
 
 Any e-commerce business can create an account at `/app/register` and run its offers from `/app`. The portal is
-being built in phases. Available now: sign-up and log-in, and a Home page with today's numbers, a setup
-checklist, and the latest activity (which offers went to whom and why, or which rule held one back).
+being built in phases. Available now:
+- **Sign-up and log-in**, and a **Home** page with today's numbers, a setup checklist, and the latest activity
+  (which offers went to whom and why, or which rule held one back).
+- **Customers**: search and filter by group or "on Telegram"; each customer's page explains their behaviour in
+  plain words and recommends the best offer the rules allow, with alternatives. Send it in one click, or
+  **create a custom offer** (type, amount, category, minimum order, validity). It's checked against every rule
+  first and you see exactly why if it isn't allowed. Customers on Telegram get it instantly; for everyone else
+  you get a coupon code to share.
 
 To give the ShopKart demo store a login (you'll be asked for a password):
 

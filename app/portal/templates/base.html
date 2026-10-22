@@ -13,13 +13,18 @@
   <aside class="side">
     <div class="biz"><b>{{ biz.tenant.name }}</b><span>Offer Engine</span></div>
     <a class="nav {{ 'on' if nav == 'home' }}" href="/app"><span class="nav-ico">⌂</span>Home</a>
-    {% block nav_extra %}{% endblock %}
+    <a class="nav {{ 'on' if nav == 'customers' }}" href="/app/customers"><span class="nav-ico">☺</span>Customers</a>
     <div class="foot">
       {{ biz.email }}
       <form method="post" action="/app/logout"><button class="secondary" type="submit">Log out</button></form>
     </div>
   </aside>
   <main class="content">
+    {% if flash %}
+    <div class="flash {{ 'ok' if flash.kind == 'ok' else 'err' }}" role="status">
+      <b>{{ flash.title }}</b>{% if flash.lines %}<ul>{% for l in flash.lines %}<li>{{ l }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 </div>

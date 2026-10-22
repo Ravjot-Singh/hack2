@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% set seg = segment_info.get(f.segment) %}
+{% macro cat(k) %}{{ category_labels.get(k, k) }}{% endmacro %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="small"><a href="/app/customers">← Customers</a></p>
+    <h1>{{ c.name }}</h1>
+    <p>{{ c.external_ref }}{% if c.city %} · {{ c.city }}{% endif %}{% if c.age %} · {{ c.age }} yrs{% endif %} ·
+      {{ c.loyalty_tier|title }} member · customer since {{ c.signup_date.strftime('%b %Y') }}</p>
+  </div>
+  <div>
+    {% if tg.linked and not tg.opted_out %}<span class="badge sent">📱 On Telegram{% if tg.name %} as {{ tg.name }}{% endif %}</span>
+    {% elif tg.linked %}<span class="badge">🔕 Turned offers off</span>
+    {% else %}<span class="badge">Not on Telegram</span>{% endif %}
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr)">
+<div>
+  <div class="card">
+    <h2>{{ seg.label if seg else f.segment }}</h2>
+    {% if seg %}<p class="small">{{ seg.description }}</p>{% endif %}
+    <dl class="kv small">
+      <dt>Risk of leaving</dt><dd><b>{{ f.churn_risk|level }}</b> ({{ f.churn_risk|pct }})</dd>
+      <dt>Would buy anyway (next 2 weeks)</dt><dd>{{ f.buy_anyway_prob|pct }}{% if f.buy_anyway_prob > 0.5 %}: a discount would mostly cost you margin{% endif %}</dd>
+      <dt>Responds to deals</dt><dd>{{ f.deal_affinity|level }}</dd>
+      <dt>Likely spend, next 3 months</dt><dd>{{ f.expected_value_90d|rs }}</dd>
+    </dl>
+    <p class="desc">Why this group: {{ f.segment_reason }}</p>
+  </div>
+  <div class="card section">
+    <h2>Shopping</h2>
+    <dl class="kv small">
+      <dt>Last order</dt><dd>{{ f.recency_days|ago('none in the last 12 months') }}</dd>
+      <dt>Last 12 months</dt><dd>{{ f.orders_365 }} orders · {{ f.monetary_365|rs }}{% if f.aov %} · avg {{ f.aov|rs }}{% endif %}</dd>
+      <dt>Favourite category</dt><dd>{{ cat(f.top_category) if f.top_category else '–' }}</dd>
+      <dt>Orders with a discount</dt><dd>{{ f.discount_share|pct }}</dd>
+      <dt>Items returned</dt><dd>{{ f.return_rate|pct }}</dd>
+      <dt>Visits (30 days)</dt><dd>{{ f.sessions_30 }}</dd>
+      {% if f.abandoned_carts_7d %}<dt>Left a cart this week</dt><dd>{{ cat(f.last_abandoned_cart_category) }} · {{ f.last_abandoned_cart_value|rs }}</dd>{% endif %}
+      <dt>Reward points</dt><dd>{{ "{:,}".format(f.points_balance) }}{% if f.points_expiring_30d %} ({{ f.points_expiring_30d }} expire {{ f.next_points_expiry|dt }}){% endif %}</dd>
+      {% if f.days_to_birthday <= 30 %}<dt>Birthday</dt><dd>{{ 'today 🎂' if f.days_to_birthday == 0 else 'in ' ~ f.days_to_birthday ~ ' days' }}</dd>{% endif %}
+    </dl>
+  </div>
+</div>
+
+<div>
+  <div class="card">
+    <h2>Recommended offer</h2>
+    {% if decision.customer_block %}
+      <p><span class="badge no_offer">Can't send right now</span></p>
+      <p class="small">{{ decision.customer_block }}</p>
+    {% elif decision.best %}{% set b = decision.best %}
+      <div class="tile"><div class="value" style="font-size: 22px">{{ b.headline }}</div></div>
+      <p class="small">{{ b.label }} · {{ b.terms }}</p>
+      <p class="small muted">Why: {{ b.reasons|join('; ') or 'suits every customer' }}. At most it can cost you {{ b.liability_rs|rs }}.</p>
+      <form method="post" action="/app/customers/{{ c.id }}/send" class="inline">
+        <input type="hidden" name="offer_key" value="best">
+        <button type="submit">Send recommended offer</button>
+        <span class="small muted">{% if tg.linked and not tg.opted_out %}{{ 'Goes out on Telegram now.' if bot_connected else 'Coupon is saved (connect your bot to deliver on Telegram).' }}{% else %}You'll get a coupon code to share with them.{% endif %}</span>
+      </form>
+      {% if decision.eligible|length > 1 %}
+      <h3 class="section">Other offers the rules allow</h3>
+      <div class="table-wrap"><table>
+        {% for x in decision.eligible[1:] %}
+        <tr><td><b>{{ x.headline }}</b><div class="desc">{{ x.label }} · {{ x.terms }}</div></td>
+          <td class="num">up to {{ x.liability_rs|rs }}</td>
+          <td><form method="post" action="/app/customers/{{ c.id }}/send"><input type="hidden" name="offer_key" value="{{ x.offer_key }}"><button class="secondary" type="submit">Send this instead</button></form></td></tr>
+        {% endfor %}
+      </table></div>
+      {% endif %}
+    {% else %}
+      <p><span class="badge no_offer">No offer fits right now</span></p>
+      <p class="small">None of your offers pass the rules for this customer at the moment.</p>
+    {% endif %}
+    {% if decision.blocked and not decision.customer_block %}
+    <details class="section small"><summary>Offers held back by your rules ({{ decision.blocked|length }})</summary>
+      <ul>{% for x in decision.blocked %}<li><b>{{ x.label }}</b>: {{ x.reason }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </div>
+
+  <div class="card section" id="custom">
+    <h2>Create a custom offer</h2>
+    <p class="small muted">Your offer is checked against every rule (discount limits, budget, how often they hear from you) before it's sent.</p>
+    <form method="post" action="/app/customers/{{ c.id }}/custom#custom" class="grid g2" style="gap: 10px">
+      <label class="f" style="grid-column: 1 / -1">Offer name (shown to the customer)<input name="label" value="{{ custom.label }}" maxlength="60"></label>
+      <label class="f">Type
+        <select name="type" id="ctype">
+          {% for k, v in {'percent_off': '% off', 'flat_off': '₹ off', 'free_delivery': 'Free delivery', 'bonus_points': 'Bonus points'}.items() %}
+          <option value="{{ k }}" {{ 'selected' if custom.type == k }}>{{ v }}</option>{% endfor %}
+        </select></label>
+      <label class="f" id="cvalue">Amount<input type="number" name="value" value="{{ custom.value }}" min="0" step="1"></label>
+      <label class="f">On
+        <select name="category">
+          <option value="top_category" {{ 'selected' if custom.category == 'top_category' }}>Their favourite category{% if f.top_category %} ({{ cat(f.top_category) }}){% endif %}</option>
+          {% if f.abandoned_carts_7d %}<option value="from_cart" {{ 'selected' if custom.category == 'from_cart' }}>Their abandoned cart ({{ cat(f.last_abandoned_cart_category) }})</option>{% endif %}
+          <option value="any" {{ 'selected' if custom.category == 'any' }}>Whole store</option>
+          {% for k, v in category_labels.items() %}<option value="{{ k }}" {{ 'selected' if custom.category == k }}>{{ v }}</option>{% endfor %}
+        </select></label>
+      <label class="f">Minimum order (₹)<input type="number" name="min_order_value" value="{{ custom.min_order_value }}" min="0" step="1"></label>
+      <label class="f" id="cmax">Maximum discount (₹)<input type="number" name="max_discount_rs" value="{{ custom.max_discount_rs }}" min="1" step="1"></label>
+      <label class="f">Valid for
+        <select name="valid_hours">
+          {% for h, t in [(24, '1 day'), (48, '2 days'), (72, '3 days'), (168, '1 week')] %}
+          <option value="{{ h }}" {{ 'selected' if custom.valid_hours|int == h }}>{{ t }}</option>{% endfor %}
+        </select></label>
+      <div style="grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap">
+        <button type="submit" name="action" value="check" class="secondary">Check offer</button>
+        {% if check and check.ok %}<button type="submit" name="action" value="send">Send this offer</button>{% endif %}
+      </div>
+    </form>
+    {% if check %}
+      {% if check.problems %}
+      <div class="flash err section"><b>This offer breaks your rules</b><ul>{% for p in check.problems %}<li>{{ p }}</li>{% endfor %}</ul></div>
+      {% elif check.blocked %}
+      <div class="flash err section"><b>{{ c.name.split()[0] }} can't get this offer right now</b><ul>{% for p in check.blocked %}<li>{{ p }}</li>{% endfor %}</ul></div>
+      {% elif check.ok %}{% set x = check.decision.best %}
+      <div class="flash ok section"><b>✓ Passes every rule: {{ x.headline }}</b>
+        <div class="small">{{ x.terms }}. At most it can cost you {{ x.liability_rs|rs }}.</div>
+        {% if x.reasons %}<div class="small muted">{{ x.reasons|join('; ') }}</div>{% endif %}
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+</div>
+
+<div class="card section">
+  <h2>Offer history</h2>
+  {% if history %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>When</th><th>Why</th><th>Result</th><th>Offer</th><th>Details</th></tr></thead>
+    <tbody>{% for h in history %}{% set d = h.d %}
+      <tr><td class="num">{{ h.created_at|dt }}</td>
+        <td>{{ TRIGGER_LABELS.get(d.trigger, d.trigger.replace('event:', '').replace('_', ' ')|capitalize) }}</td>
+        <td><span class="badge {{ d.outcome }}">{{ RESULT_LABELS.get(d.outcome, d.outcome) }}</span>
+          {% if d.response == 'claimed' %}<span class="badge claimed">Claimed</span>{% elif d.response == 'dismissed' %}<span class="badge">Not now</span>{% endif %}</td>
+        <td>{{ d.headline or '–' }}{% if d.coupon_code %}<div class="desc">Code {{ d.coupon_code }}</div>{% endif %}</td>
+        <td class="small">{{ d.block_reason or '' }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No offers yet.</p>{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const t = document.getElementById("ctype");
+  const sync = () => {
+    document.getElementById("cmax").style.display = t.value === "percent_off" ? "" : "none";
+    document.getElementById("cvalue").style.display = t.value === "free_delivery" ? "none" : "";
+  };
+  if (t) { t.addEventListener("change", sync); sync(); }
+</script>
+{% endblock %}

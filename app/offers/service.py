@@ -26,6 +26,9 @@ from app.rules.engine import Candidate, CustomerContext, SentOffer, evaluate
 from app.rules.policy import TenantPolicy
 
 COUPON_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
+# Someone deliberately asked for this offer (the customer, or the business's operator): never held back as a
+# control-group member.
+DIRECT_TRIGGERS = {"on_demand", "operator"}
 
 
 @dataclass
@@ -34,6 +37,9 @@ class OfferResult:
     decision_id: int | None = None
     message: str | None = None
     next_time: datetime | None = None
+    chat_id: int | None = None  # set when the customer can be messaged on Telegram
+    coupon: str | None = None
+    headline: str | None = None
 
 
 # ---- chats & personas ----
@@ -84,6 +90,10 @@ def _features(s: Session, tenant_id: int, customer_id: int, policy: TenantPolicy
     for k in ("computed_at", "last_abandoned_cart_at", "next_points_expiry"):
         f[k] = _aware(f[k])
     return f
+
+
+def chat_opted_out(s: Session, customer_id: int) -> bool:
+    return bool(s.scalar(select(TelegramUser.opted_out).where(TelegramUser.customer_id == customer_id)))
 
 
 def load_profile(tenant_id: int, customer_id: int, policy: TenantPolicy, now: datetime) -> tuple[dict, dict]:
@@ -174,7 +184,8 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
                 return OfferResult("too_soon", rec.id, next_time=_next_allowed(recent, policy, now))
             return OfferResult("none", rec.id)
 
-        if trigger != "on_demand" and in_holdout(tenant_slug, customer_id, policy.rules.measurement.holdout_pct):
+        if trigger not in DIRECT_TRIGGERS and in_holdout(tenant_slug, customer_id,
+                                                         policy.rules.measurement.holdout_pct):
             b = decision.best
             rec.outcome, rec.offer_key, rec.headline, rec.category = "holdout", b.offer_key, b.headline, b.category
             rec.expected_net_rs, rec.valid_until = b.expected_net_rs, b.valid_until
@@ -192,8 +203,10 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
         s.add(rec)
         rec.ai_rejected_reason, rec.ai_reason = choice.ai_rejected_reason, choice.ai_reason
         coupon = new_coupon(coupon_prefix)
-        # A customer asking for an offer is not an interruption, so quiet hours don't apply on demand.
-        deferred = decision.send_after is not None and trigger != "on_demand"
+        # A customer asking for an offer is not an interruption, so quiet hours don't apply on demand. They only
+        # hold back a *message*: for customers not on Telegram the coupon is simply saved.
+        reachable = user is not None and not user.opted_out
+        deferred = decision.send_after is not None and trigger != "on_demand" and reachable
         valid_until = c.valid_until if deferred else now + (c.valid_until - (decision.send_after or now))
         rec.outcome = "deferred" if deferred else "sent"
         rec.send_after = decision.send_after if deferred else None
@@ -208,7 +221,8 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
             rec.terms = c.terms
         rec.message = offer_message(intro, c, coupon)
         s.flush()
-        return OfferResult("deferred" if deferred else "offer", rec.id, rec.message, next_time=rec.send_after)
+        return OfferResult("deferred" if deferred else "offer", rec.id, rec.message, next_time=rec.send_after,
+                           chat_id=user.chat_id if reachable else None, coupon=coupon, headline=c.headline)
 
 
 def set_message_id(decision_id: int, message_id: int) -> None:

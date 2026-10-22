@@ -27,6 +27,11 @@ every AI choice before anything is sent.
   per 15 min lock) / logout, Home (numbers, setup checklist, latest activity). `current_business` dependency
   scopes every page to the session's business and checks same-origin on POST. Refuses to run on a public server
   with placeholder secrets. Demo login: `python scripts/create_account.py --tenant shopkart --email ...`.
+  Customers (`/app/customers`: search, group/Telegram filters, sort) and the customer page: plain-language
+  profile, recommended offer + alternatives (`portal/offers.preview`, real history + today's budget), Send
+  (trigger `operator`: never held out as control group), and a custom-offer builder (`check_custom` builds a
+  one-off `Offer` key `custom`, runs `check_rules` + `evaluate` on a rules copy; Send only after it passes).
+  Delivery: Telegram push if linked, else coupon saved; quiet hours queue only Telegram messages.
 - `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →
   daily demand → orders, carts, browsing, points), `loader.py` (replaces one tenant's rows, shifts ids),
   `summary.py` (realism report). `customers.true_segment` and `customers.price_sensitivity` are hidden generator
@@ -96,7 +101,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 ## Build stages
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
 6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅
-Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers
+Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers ✅
 P3 deals  P4 data upload  P5 settings  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)

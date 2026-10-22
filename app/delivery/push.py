@@ -18,6 +18,17 @@ def offer_keyboard(decision_id: int) -> InlineKeyboardMarkup:
     ])
 
 
+async def with_bot(running_bots: dict, slug: str, token: str | None, fn):
+    """Run fn(bot) with the business's running bot if this process has one, else a short-lived client."""
+    running = running_bots.get(slug)
+    if running is not None:
+        return await fn(running.bot)
+    if not token:
+        raise LookupError("no bot connected")
+    async with Bot(token) as bot:
+        return await fn(bot)
+
+
 async def push_offer(bot: Bot, chat_id: int, decision_id: int, message: str, lead: str | None = None) -> int:
     if lead:
         await bot.send_message(chat_id, lead, parse_mode=ParseMode.HTML)

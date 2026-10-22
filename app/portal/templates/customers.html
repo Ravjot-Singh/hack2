@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Customers{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Customers</h1><p>{{ "{:,}".format(total) }} {{ 'customer' if total == 1 else 'customers' }}{{ ' match' if q or group or telegram else '' }}. Open one to see what they'd respond to and send an offer.</p></div>
+</div>
+
+<div class="pill-list" style="margin-bottom: 12px">
+  <a class="badge {{ 'sent' if not group }}" href="{{ qs(group='') }}">All</a>
+  {% for s in segment_info.values() %}{% if counts.get(s.key) %}
+  <a class="badge {{ 'sent' if group == s.key }}" href="{{ qs(group=s.key) }}" title="{{ s.description }}">{{ s.label }} · {{ "{:,}".format(counts[s.key]) }}</a>
+  {% endif %}{% endfor %}
+</div>
+
+<form method="get" class="card inline" style="margin-bottom: 16px">
+  <input type="hidden" name="group" value="{{ group }}">
+  <label class="f" style="flex: 1; min-width: 200px">Search<input name="q" value="{{ q }}" placeholder="Name, customer ID, phone or email"></label>
+  <label class="f">Sort by
+    <select name="sort">
+      {% for k, v in {'spend': 'Biggest spenders', 'recent': 'Most recent order', 'risk': 'Most likely to leave', 'name': 'Name'}.items() %}
+      <option value="{{ k }}" {{ 'selected' if sort == k }}>{{ v }}</option>{% endfor %}
+    </select></label>
+  <label class="f" style="flex-direction: row; gap: 6px; align-items: center"><input type="checkbox" name="telegram" value="1" {{ 'checked' if telegram }}> On Telegram only</label>
+  <button type="submit">Show</button>
+</form>
+
+<div class="card">
+  {% if rows %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Customer</th><th>City</th><th>Group</th><th class="num">Orders (12 mo)</th><th class="num">Spent (12 mo)</th><th class="num">Last order</th><th>Risk of leaving</th><th>Telegram</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><a href="/app/customers/{{ r.id }}"><b>{{ r.name }}</b></a><div class="desc">{{ r.external_ref }}</div></td>
+      <td>{{ r.city or '–' }}</td>
+      <td>{{ segment_labels.get(r.segment, '–') }}</td>
+      <td class="num">{{ r.orders_365 if r.orders_365 is not none else '–' }}</td>
+      <td class="num">{{ r.monetary_365|rs if r.monetary_365 is not none else '–' }}</td>
+      <td class="num">{{ r.recency_days|ago }}</td>
+      <td>{{ r.churn_risk|level if r.churn_risk is not none else '–' }}</td>
+      <td>{% if r.chat_id %}{{ '🔕 Paused' if r.opted_out else '📱 Yes' }}{% else %}<span class="muted">No</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="small">
+    {% if page_no > 1 %}<a href="{{ qs(page_no=page_no - 1) }}">← Previous</a> · {% endif %}
+    Page {{ page_no }} of {{ pages }}
+    {% if page_no < pages %} · <a href="{{ qs(page_no=page_no + 1) }}">Next →</a>{% endif %}
+  </p>
+  {% else %}
+  <p class="muted">{% if q or group or telegram %}No customers match. <a href="/app/customers">Clear filters</a>{% else %}No customers yet. Add your customer data to get started.{% endif %}</p>
+  {% endif %}
+</div>
+{% endblock %}
