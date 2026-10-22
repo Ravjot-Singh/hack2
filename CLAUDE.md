@@ -19,6 +19,10 @@ every AI choice before anything is sent.
 - `app/tenants/registry.py` — multi-tenant registry. Each `tenants/<slug>/` folder = one store + one bot
   (`tenant.yaml`, later `rules.yaml`, `catalog.yaml`). `_template/` is copied to add a bot. Every business
   table carries `tenant_id`.
+- `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →
+  daily demand → orders, carts, browsing, points), `loader.py` (replaces one tenant's rows, shifts ids),
+  `summary.py` (realism report). `customers.true_segment` is ground truth for evaluation only — the offer engine
+  must never read it. Seed with `python scripts/seed.py --tenant shopkart` (~2.5 min to Neon).
 - Decision pipeline (later stages): features → rules engine shortlist → holdout → Groq chooser → validator → deliver → log.
 
 ## Commands
@@ -30,7 +34,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 ```
 
 ## Build stages
-1. Scaffold ✅  2. Synthetic data  3. Features & segments  4. Rules engine  5. Telegram bot
+1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments  4. Rules engine  5. Telegram bot
 6. Agent + validator  7. Triggers & measurement  8. Dashboard  9. Deploy (Render) + README
 
 ## Conventions
