@@ -20,7 +20,7 @@
     <a class="nav {{ 'on' if nav == 'data' }}" href="/app/data"><span class="nav-ico">⇪</span>Data</a>
     <a class="nav {{ 'on' if nav == 'settings' }}" href="/app/settings"><span class="nav-ico">⚙</span>Settings</a>
     <div class="foot">
-      {{ biz.email }}
+      <span class="who">{{ biz.email }}</span>
       <form method="post" action="/app/logout"><button class="secondary" type="submit">Log out</button></form>
     </div>
   </aside>

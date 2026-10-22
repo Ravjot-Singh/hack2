@@ -17,7 +17,7 @@
   </div>
 </div>
 
-<div class="grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr)">
+<div class="grid cust-grid">
 <div>
   <div class="card">
     <h2>{{ seg.label if seg else f.segment }}</h2>
@@ -28,7 +28,7 @@
       <dt>Responds to deals</dt><dd>{{ f.deal_affinity|level }}</dd>
       <dt>Likely spend, next 3 months</dt><dd>{{ f.expected_value_90d|rs }}</dd>
     </dl>
-    <p class="desc">Why this group: {{ f.segment_reason }}</p>
+    <p class="desc">Why this group: {% for r in f.segment_reason.split('; ') %}{{ r|plain }}{{ '; ' if not loop.last }}{% endfor %}</p>
   </div>
   <div class="card section">
     <h2>Shopping</h2>
@@ -56,7 +56,7 @@
     {% elif decision.best %}{% set b = decision.best %}
       <div class="tile"><div class="value" style="font-size: 22px">{{ b.headline }}</div></div>
       <p class="small">{{ b.label }} · {{ b.terms }}</p>
-      <p class="small muted">Why: {{ b.reasons|join('; ') or 'suits every customer' }}. At most it can cost you {{ b.liability_rs|rs }}.</p>
+      <p class="small muted">Why: {% for r in b.reasons %}{{ r|plain(segment_labels) }}{{ '; ' if not loop.last }}{% else %}suits every customer{% endfor %}. At most it can cost you {{ b.liability_rs|rs }}.</p>
       <form method="post" action="/app/customers/{{ c.id }}/send" class="inline">
         <input type="hidden" name="offer_key" value="best">
         <button type="submit">Send recommended offer</button>
@@ -78,7 +78,7 @@
     {% endif %}
     {% if decision.blocked and not decision.customer_block %}
     <details class="section small"><summary>Offers held back by your rules ({{ decision.blocked|length }})</summary>
-      <ul>{% for x in decision.blocked %}<li><b>{{ x.label }}</b>: {{ x.reason }}</li>{% endfor %}</ul>
+      <ul>{% for x in decision.blocked %}<li><b>{{ x.label }}</b>: {{ x.reason|plain(segment_labels) }}</li>{% endfor %}</ul>
     </details>
     {% endif %}
   </div>
@@ -117,11 +117,11 @@
       {% if check.problems %}
       <div class="flash err section"><b>This offer breaks your rules</b><ul>{% for p in check.problems %}<li>{{ p }}</li>{% endfor %}</ul></div>
       {% elif check.blocked %}
-      <div class="flash err section"><b>{{ c.name.split()[0] }} can't get this offer right now</b><ul>{% for p in check.blocked %}<li>{{ p }}</li>{% endfor %}</ul></div>
+      <div class="flash err section"><b>{{ c.name.split()[0] }} can't get this offer right now</b><ul>{% for p in check.blocked %}<li>{{ p|plain(segment_labels) }}</li>{% endfor %}</ul></div>
       {% elif check.ok %}{% set x = check.decision.best %}
       <div class="flash ok section"><b>✓ Passes every rule: {{ x.headline }}</b>
         <div class="small">{{ x.terms }}. At most it can cost you {{ x.liability_rs|rs }}.</div>
-        {% if x.reasons %}<div class="small muted">{{ x.reasons|join('; ') }}</div>{% endif %}
+        {% if x.reasons %}<div class="small muted">{% for r in x.reasons %}{{ r|plain(segment_labels) }}{{ '; ' if not loop.last }}{% endfor %}</div>{% endif %}
       </div>
       {% endif %}
     {% endif %}
@@ -140,7 +140,7 @@
         <td><span class="badge {{ d.outcome }}">{{ RESULT_LABELS.get(d.outcome, d.outcome) }}</span>
           {% if d.response == 'claimed' %}<span class="badge claimed">Claimed</span>{% elif d.response == 'dismissed' %}<span class="badge">Not now</span>{% endif %}</td>
         <td>{{ d.headline or '–' }}{% if d.coupon_code %}<div class="desc">Code {{ d.coupon_code }}</div>{% endif %}</td>
-        <td class="small">{{ d.block_reason or '' }}</td></tr>
+        <td class="small">{{ d.block_reason|plain(segment_labels) }}</td></tr>
     {% endfor %}</tbody>
   </table></div>
   {% else %}<p class="muted">No offers yet.</p>{% endif %}

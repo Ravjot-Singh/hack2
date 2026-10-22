@@ -8,7 +8,9 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import PlainTextResponse, RedirectResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from telegram import Update
@@ -19,6 +21,7 @@ from app.dashboard.routes import STATIC_DIR, router as dashboard_router
 from app.portal.data_routes import router as portal_data_router
 from app.portal.deals_routes import router as portal_deals_router
 from app.portal.routes import router as portal_router
+from app.portal.routes import templates as portal_templates
 from app.portal.settings_routes import router as portal_settings_router
 from starlette.middleware.sessions import SessionMiddleware
 from app.db.session import get_engine, session_scope
@@ -60,6 +63,41 @@ app.include_router(portal_router)
 app.include_router(portal_deals_router)
 app.include_router(portal_data_router)
 app.include_router(portal_settings_router)
+
+
+ERROR_TEXT = {
+    400: ("That didn't work", "Something in that request wasn't right. Go back and try again."),
+    403: ("Not allowed", "That action was blocked for your security. Reload the page and try again."),
+    404: ("Not found", "This page doesn't exist, or it belongs to another business."),
+    503: ("Not available yet", "This part of the service isn't set up yet."),
+}
+
+
+def _wants_portal_page(request: Request) -> bool:
+    return request.url.path.startswith("/app") and "text/html" in request.headers.get("accept", "")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def portal_http_errors(request: Request, exc: StarletteHTTPException):
+    """Friendly pages for people using the portal in a browser; JSON for everything else (unchanged)."""
+    if exc.status_code < 400 or not _wants_portal_page(request):
+        return await http_exception_handler(request, exc)
+    title, message = ERROR_TEXT.get(exc.status_code, ("Something went wrong", "Please try again."))
+    if exc.status_code in (400, 503) and isinstance(exc.detail, str):
+        message = exc.detail  # these details are written for people
+    return portal_templates.TemplateResponse(request, "error.html", {"title": title, "message": message},
+                                             status_code=exc.status_code)
+
+
+@app.exception_handler(Exception)
+async def portal_crash(request: Request, exc: Exception):
+    log.exception("Unhandled error on %s", request.url.path)
+    if _wants_portal_page(request):
+        return portal_templates.TemplateResponse(
+            request, "error.html", {"title": "Something went wrong",
+                                    "message": "Sorry, that didn't work. Please try again in a moment."},
+            status_code=500)
+    return PlainTextResponse("Internal Server Error", status_code=500)
 
 
 @app.get("/", include_in_schema=False)

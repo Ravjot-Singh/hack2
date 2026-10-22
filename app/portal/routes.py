@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -54,7 +55,33 @@ def _ago(days: int | None, never: str = "none this year") -> str:
     return "today" if days == 0 else "yesterday" if days == 1 else f"{days} days ago"
 
 
-templates.env.filters.update(level=_level, ago=_ago)
+def _plain(text: str | None, segment_labels: dict | None = None) -> str:
+    """Rewrite the engine's reasons for business users (group names instead of keys, no rule jargon)."""
+    if not text:
+        return ""
+    labels = segment_labels or {}
+    m = re.match(r"Audience rule not met - (.+?): (.+?) \(needs (>=|<=) (.+?)\)\.?$", text)
+    if m:
+        what, now, op, need = m.groups()
+        return f"Only when {what} is {'at least' if op == '>=' else 'at most'} {need} (this customer: {now})."
+    m = re.match(r"Only for (.+); customer is (\w+)\.?$", text)
+    if m:
+        groups = ", ".join(labels.get(k.strip(), k.strip()) for k in m.group(1).split(","))
+        return f"Only for {groups} (this customer is {labels.get(m.group(2), m.group(2))})."
+    m = re.match(r"segment: (\w+)$", text)
+    if m:
+        return f"they're in {labels.get(m.group(1), m.group(1))}"
+    m = re.match(r"^(.+?): (.+?) \((>=|<=) .+\)$", text)
+    if m:
+        return f"{m.group(1)}: {m.group(2)}"
+    if text.startswith("Not worth it"):
+        return "It would probably cost more than it earns from this customer."
+    if text.startswith("No offer passed the rules"):
+        return "No offer fits this customer right now."
+    return text
+
+
+templates.env.filters.update(level=_level, ago=_ago, plain=_plain)
 
 
 def _safe_next(target: str | None) -> str:

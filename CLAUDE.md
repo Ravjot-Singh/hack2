@@ -126,7 +126,8 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
 6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅
 Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers ✅
-P3 deals ✅  P4 data upload ✅  P5 settings ✅  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
+P3 deals ✅  P4 data upload ✅  P5 settings ✅  P6 polish ✅ (friendly HTML error pages for /app in browsers,
+JSON otherwise; `routes._plain` filter rewrites engine reasons for operators; isolation sweep test; mobile layout).  10. Deploy (Render) + README: LAST, only when the user says.
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order

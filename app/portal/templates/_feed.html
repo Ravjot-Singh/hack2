@@ -18,7 +18,7 @@
         {% if d.coupon_code %}<div class="desc">Code {{ d.coupon_code }}</div>{% endif %}
       {% elif d.outcome == 'deferred' %}<span class="channel">◷ Goes out on Telegram {{ d.send_after|dt }} (quiet hours)</span>
       {% elif d.outcome == 'holdout' %}Held back on purpose so you can measure what offers add.
-      {% else %}{{ d.block_reason or '' }}{% endif %}
+      {% else %}{{ d.block_reason|plain(segment_labels) }}{% endif %}
     </td>
   </tr>
   {% endfor %}
