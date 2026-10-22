@@ -173,7 +173,9 @@ being built in phases. Available now:
   plain words and recommends the best offer the rules allow, with alternatives. Send it in one click, or
   **create a custom offer** (type, amount, category, minimum order, validity). It's checked against every rule
   first and you see exactly why if it isn't allowed. Customers on Telegram get it instantly; for everyone else
-  you get a coupon code to share.
+  you get a coupon code to share. Offers you send by hand skip only the "how often" limits (gap between offers,
+  weekly cap, no-repeat window), with a heads-up if the customer heard from you recently; every discount, budget
+  and margin rule still applies, and so does a customer's opt-out.
 
 To give the ShopKart demo store a login (you'll be asked for a password):
 

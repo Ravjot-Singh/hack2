@@ -29,7 +29,9 @@ every AI choice before anything is sent.
   with placeholder secrets. Demo login: `python scripts/create_account.py --tenant shopkart --email ...`.
   Customers (`/app/customers`: search, group/Telegram filters, sort) and the customer page: plain-language
   profile, recommended offer + alternatives (`portal/offers.preview`, real history + today's budget), Send
-  (trigger `operator`: never held out as control group), and a custom-offer builder (`check_custom` builds a
+  (trigger `operator`: never held out as control group; `evaluate(relax_frequency=True)` skips only the weekly
+  cap, gap and same-offer cooldown, with a heads-up on the page; opt-out, caps, per-offer max, budget, margin
+  guards, value floor and quiet hours still apply), and a custom-offer builder (`check_custom` builds a
   one-off `Offer` key `custom`, runs `check_rules` + `evaluate` on a rules copy; Send only after it passes).
   Delivery: Telegram push if linked, else coupon saved; quiet hours queue only Telegram messages.
 - `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →

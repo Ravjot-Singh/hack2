@@ -27,7 +27,8 @@ from app.rules.policy import TenantPolicy
 
 COUPON_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
 # Someone deliberately asked for this offer (the customer, or the business's operator): never held back as a
-# control-group member.
+# control-group member. Operator sends also skip the frequency limits (gap, weekly cap, same-offer cooldown);
+# every price/margin rule still applies.
 DIRECT_TRIGGERS = {"on_demand", "operator"}
 
 
@@ -168,7 +169,8 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
         f = _features(s, tenant_id, customer_id, policy, now)
         recent = _recent_offers(s, customer_id, now, max(7, lim.same_offer_cooldown_days))
         ctx = CustomerContext(customer_id, f, f["segment"], bool(user and user.opted_out), recent)
-        decision = evaluate(policy.rules, policy.catalog, ctx, budget_used_today(s, tenant_id, now), now)
+        decision = evaluate(policy.rules, policy.catalog, ctx, budget_used_today(s, tenant_id, now), now,
+                            relax_frequency=trigger == "operator")
 
         rec = OfferDecision(tenant_id=tenant_id, customer_id=customer_id, created_at=now, trigger=trigger,
                             segment=f["segment"], outcome="no_offer", liability_rs=0,

@@ -185,8 +185,16 @@ def _customer_page(request: Request, biz: Business, customer_id: int, check=None
               "name": chat.tg_name if chat else None}
         history = pq.offer_history(s, customer_id)
     f, decision = portal_offers.preview(biz, customer_id, now)
+    # Sending by hand skips the gap between offers, so tell the operator when they'd be overriding it.
+    gap_h = biz.policy.rules.limits.min_hours_between_offers
+    last_sent = next((h["created_at"] for h in history if h["d"].outcome in ("sent", "deferred")), None)
+    recent_note = None
+    if last_sent and (now - last_sent).total_seconds() < gap_h * 3600:
+        hours = max(1, round((now - last_sent).total_seconds() / 3600))
+        recent_note = (f"Heads-up: they got an offer {hours}h ago. Automatic offers wait {gap_h}h between offers; "
+                       "sending by hand skips that wait.")
     return page(request, "customer.html", biz, "customers", c=cust, f=f, tg=tg, decision=decision, history=history,
-                check=check, custom=custom_form or portal_offers.custom_form_defaults(decision, f),
+                check=check, recent_note=recent_note, custom=custom_form or portal_offers.custom_form_defaults(decision, f),
                 bot_connected=bool(biz.tenant.bot_token), **_labels(biz))
 
 

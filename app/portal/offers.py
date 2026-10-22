@@ -26,7 +26,8 @@ FIELD_NAMES = {"value": "Amount", "min_order_value": "Minimum order", "max_disco
 
 
 def preview(biz: Business, customer_id: int, now: datetime, policy: TenantPolicy | None = None) -> tuple[dict, Decision]:
-    """What the rules allow for this customer right now (real offer history + today's budget), nothing recorded."""
+    """What the operator could send this customer right now (real offer history + today's budget; frequency
+    limits relaxed as for operator sends), nothing recorded."""
     policy = policy or biz.policy
     lim = policy.rules.limits
     with session_scope() as s:
@@ -35,7 +36,7 @@ def preview(biz: Business, customer_id: int, now: datetime, policy: TenantPolicy
         budget = service.budget_used_today(s, biz.tenant_id, now)
         opted_out = service.chat_opted_out(s, customer_id)
     ctx = CustomerContext(customer_id, f, f["segment"], opted_out, recent)
-    return f, evaluate(policy.rules, policy.catalog, ctx, budget, now)
+    return f, evaluate(policy.rules, policy.catalog, ctx, budget, now, relax_frequency=True)
 
 
 def only_offer(policy: TenantPolicy, offer_key: str) -> TenantPolicy | None:

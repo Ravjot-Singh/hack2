@@ -6,6 +6,7 @@ from the shortlist this returns, and the validator re-checks its pick against th
 Order of checks
   customer level: opted out -> weekly cap -> gap since last offer      (fail = no offer at all)
   per offer:      enabled -> segment -> audience -> same-offer cooldown -> category resolvable
+  (operator sends relax only the weekly cap, the gap and the same-offer cooldown)
                   -> (money offers) buy-anyway guard, return-rate guard -> category discount cap
                   -> daily budget -> expected value
   quiet hours never block; they set send_after.
@@ -119,7 +120,10 @@ def _describe(o: Offer, cat: str, cat_label: str, pct, amount, points, max_rs, e
 
 
 def evaluate(rules: RulesConfig, catalog: CatalogInfo, ctx: CustomerContext, budget_used_today_rs: float,
-             now: datetime) -> Decision:
+             now: datetime, relax_frequency: bool = False) -> Decision:
+    """relax_frequency=True (an operator deliberately sending one offer) skips only the *frequency* limits: the
+    weekly cap, the gap between offers and the same-offer cooldown. Opt-outs, discount caps, the per-offer max,
+    the daily budget, the margin guards, the value floor and quiet hours all still apply."""
     lim = rules.limits
     f = ctx.features
     decision = Decision(ctx.customer_id, ctx.segment, [], [])
@@ -129,10 +133,10 @@ def evaluate(rules: RulesConfig, catalog: CatalogInfo, ctx: CustomerContext, bud
     last = max((s.sent_at for s in ctx.recent_offers), default=None)
     if ctx.opted_out:
         decision.customer_block = "Customer has opted out of offers."
-    elif len(week) >= lim.max_offers_per_customer_per_week:
+    elif not relax_frequency and len(week) >= lim.max_offers_per_customer_per_week:
         decision.customer_block = (f"Already received {len(week)} offers this week "
                                    f"(limit {lim.max_offers_per_customer_per_week}).")
-    elif last and now - last < timedelta(hours=lim.min_hours_between_offers):
+    elif not relax_frequency and last and now - last < timedelta(hours=lim.min_hours_between_offers):
         hours = (now - last).total_seconds() / 3600
         decision.customer_block = (f"Last offer was {hours:.0f}h ago "
                                    f"(must wait {lim.min_hours_between_offers}h between offers).")
@@ -160,7 +164,7 @@ def evaluate(rules: RulesConfig, catalog: CatalogInfo, ctx: CustomerContext, bud
             continue
         recent_same = [s for s in ctx.recent_offers if s.offer_key == o.key
                        and s.sent_at > now - timedelta(days=lim.same_offer_cooldown_days)]
-        if recent_same:
+        if recent_same and not relax_frequency:
             block(f"Same offer already sent in the last {lim.same_offer_cooldown_days} days.")
             continue
 

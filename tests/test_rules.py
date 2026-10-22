@@ -69,6 +69,27 @@ def test_min_gap_between_offers():
     assert d.eligible == [] and "48h" in d.customer_block
 
 
+def test_operator_sends_relax_frequency_but_not_price_rules():
+    sent = [SentOffer("loyalty_bonus", NOON - timedelta(hours=2)), SentOffer("birthday", NOON - timedelta(days=1))]
+
+    def relaxed(**kw):
+        ctx = CustomerContext(1, feats(**kw), kw.pop("segment", "regular"), kw.pop("opted_out", False), sent)
+        return evaluate(POLICY.rules, POLICY.catalog, ctx, kw.pop("budget_used", 0), NOON, relax_frequency=True)
+
+    assert run(recent=sent).customer_block  # normally: weekly cap / 48h gap
+    d = relaxed(days_to_birthday=3)
+    assert d.customer_block is None and {"loyalty_bonus", "birthday"} <= set(keys(d))  # gap + cooldown skipped
+    assert all(c.percent is None or c.percent <= POLICY.rules.cap_pct(c.category) for c in d.eligible)
+    ctx = CustomerContext(1, feats(), "regular", True, sent)
+    assert evaluate(POLICY.rules, POLICY.catalog, ctx, 0, NOON, relax_frequency=True).customer_block  # opt-out
+    ctx = CustomerContext(1, feats(buy_anyway_prob=0.9, days_to_birthday=3), "regular", False, sent)
+    assert "birthday" not in keys(evaluate(POLICY.rules, POLICY.catalog, ctx, 0, NOON, relax_frequency=True))
+    ctx = CustomerContext(1, feats(days_to_birthday=3), "regular", False, sent)
+    full = evaluate(POLICY.rules, POLICY.catalog, ctx, POLICY.rules.limits.daily_budget_rs - 10, NOON,
+                    relax_frequency=True)
+    assert not full.eligible  # daily budget still applies
+
+
 def test_same_offer_cooldown_blocks_only_that_offer():
     d = run(recent=[SentOffer("loyalty_bonus", NOON - timedelta(days=5))])
     assert "loyalty_bonus" not in keys(d) and "14 days" in reason(d, "loyalty_bonus")

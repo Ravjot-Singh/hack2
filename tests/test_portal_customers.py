@@ -132,8 +132,10 @@ def test_custom_offer_checked_against_rules(biz):
     with session_scope() as s:
         d = s.scalars(select(OfferDecision).where(OfferDecision.customer_id == cid)).one()
     assert d.offer_key == "custom" and d.percent == 15 and d.trigger == "operator"
+    # Sending by hand skips the frequency limits (with a heads-up), but never the price rules.
     again = _custom(c, cid, category="fashion", value=15)
-    assert "can't get this offer right now" in again.text and "48h" in again.text
+    assert "Passes every rule" in again.text and "Heads-up: they got an offer" in again.text
+    assert "cap for fashion is 30%" in _custom(c, cid, category="fashion", value=40).text
 
 
 def test_send_button_cannot_bypass_failed_check(biz):

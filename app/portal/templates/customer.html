@@ -49,6 +49,7 @@
 <div>
   <div class="card">
     <h2>Recommended offer</h2>
+    {% if recent_note %}<p class="small"><span class="badge deferred">Recent offer</span> {{ recent_note }}</p>{% endif %}
     {% if decision.customer_block %}
       <p><span class="badge no_offer">Can't send right now</span></p>
       <p class="small">{{ decision.customer_block }}</p>
