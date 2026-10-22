@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · Offer Engine</title>
+  <link rel="stylesheet" href="/admin/static/style.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/admin/static/portal.css?v={{ asset_version }}">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="card auth-card">
+    <div class="product">Offer Engine</div>
+    {% block content %}{% endblock %}
+  </div>
+</div>
+</body>
+</html>

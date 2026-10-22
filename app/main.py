@@ -1,4 +1,4 @@
-"""FastAPI entry point: health checks, Telegram webhooks and the admin dashboard (/admin).
+"""FastAPI entry point: health checks, Telegram webhooks, the operator portal (/app) and our admin console (/admin).
 
 Bots start here only when PUBLIC_BASE_URL is set (Render). Locally, run scripts/run_bot.py (polling) instead.
 """
@@ -16,6 +16,8 @@ from telegram import Update
 from app.bot.runner import build_bots, start_bots, stop_bots
 from app.config import get_settings
 from app.dashboard.routes import STATIC_DIR, router as dashboard_router
+from app.portal.routes import router as portal_router
+from starlette.middleware.sessions import SessionMiddleware
 from app.db.session import get_engine, session_scope
 from app.tenants.registry import get_tenants, sync_tenants
 
@@ -39,13 +41,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Personalised Offer Engine", lifespan=lifespan)
+_settings = get_settings()
+app.add_middleware(SessionMiddleware, secret_key=_settings.session_secret, session_cookie="oe_session",
+                   max_age=14 * 24 * 3600, same_site="lax", https_only=bool(_settings.public_base_url))
 app.mount("/admin/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(dashboard_router)
+app.include_router(portal_router)
 
 
 @app.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
-    return RedirectResponse("/admin")
+    return RedirectResponse("/app")
 
 
 @app.get("/health")

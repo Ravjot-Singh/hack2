@@ -29,7 +29,7 @@ def build_bots(webhook: bool) -> dict[str, Application]:
     bots = {}
     for slug, cfg in tenants.items():
         if not cfg.bot_token:
-            log.warning("Tenant %s has no bot token in %s; its bot is not started.", slug, cfg.bot_token_env)
+            log.info("Business %s has no bot connected; its bot is not started.", slug)
             continue
         bots[slug] = build_application(BotContext(cfg, ids[slug]), webhook)
     return bots
@@ -82,7 +82,8 @@ async def stop_bots(bots: dict[str, Application]) -> None:
 async def run_polling_forever() -> None:
     bots = build_bots(webhook=False)
     if not bots:
-        raise SystemExit("No tenant has a bot token. Set it in .env (see tenants/<slug>/tenant.yaml bot_token_env).")
+        raise SystemExit("No business has a bot connected. Connect one in the portal (Settings) or set the token "
+                         "env var named in tenants/<slug>/tenant.yaml.")
     await start_bots(bots, None, "")
     try:
         await asyncio.Event().wait()

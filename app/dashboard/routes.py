@@ -28,7 +28,7 @@ from app.measurement.metrics import measure
 from app.offers import service
 from app.offers.campaign import run_simulated_campaign
 from app.rules.engine import CustomerContext, evaluate
-from app.rules.policy import TenantPolicy, current_policy, save_rules
+from app.rules.policy import TenantPolicy, current_policy, default_rules, save_rules
 from app.rules.schema import RulesError
 from app.tenants.registry import TenantConfig, get_tenants
 from app.triggers.events import EVENTS, fire_event, run_live_campaign
@@ -240,8 +240,12 @@ async def rules_save(request: Request, ctx: Ctx = Depends(get_ctx), user: str = 
 
 @router.post("/rules/reset")
 def rules_reset(ctx: Ctx = Depends(get_ctx), user: str = Depends(require_admin)):
-    data = yaml.safe_load((ctx.tenant.path / "rules.yaml").read_text(encoding="utf-8"))
-    save_rules(ctx.tenant.slug, ctx.tenant_id, ctx.tenant.path, data, user, "Reset to rules.yaml from the repo", _now())
+    if ctx.tenant.path and (ctx.tenant.path / "rules.yaml").exists():
+        data, note = yaml.safe_load((ctx.tenant.path / "rules.yaml").read_text(encoding="utf-8")), "Reset to rules.yaml"
+    else:
+        data, note = default_rules({k: {"label": ctx.policy.catalog.labels[k], "margin_pct": m}
+                                    for k, m in ctx.policy.catalog.margins.items()}), "Reset to default rules"
+    save_rules(ctx.tenant.slug, ctx.tenant_id, ctx.tenant.path, data, user, note, _now())
     return RedirectResponse(f"/admin/rules?t={ctx.tenant.slug}&saved=1", status_code=303)
 
 
@@ -291,7 +295,7 @@ def _simulate(ctx: Ctx, days: int, budget: int | None, reset: bool) -> list[str]
         t0 = time.time()
         with session_scope() as s:
             r = run_simulated_campaign(s, ctx.tenant.slug, ctx.tenant_id, ctx.policy, ctx.tenant.name,
-                                       ctx.tenant.slug[:2].upper(), now, seed=i, daily_budget=budget)
+                                       ctx.tenant.prefix, now, seed=i, daily_budget=budget)
         top = ", ".join(f"{k} {v}" for k, v in r.by_offer.most_common(3))
         lines.append(f"{now:%a %d %b}: {r.eligible:,} eligible, {r.sent:,} sent (worst-case ₹{r.liability:,}), "
                      f"{r.holdout} holdout, budget ran out for {r.budget_stopped:,} ({time.time() - t0:.0f}s). {top}")

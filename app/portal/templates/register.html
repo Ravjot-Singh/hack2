@@ -1,0 +1,15 @@
+{% extends "_auth_base.html" %}
+{% block title %}Create account{% endblock %}
+{% block content %}
+<h1>Create your business account</h1>
+<p class="muted">Bring your customer data, connect your Telegram bot, and send offers that make sense for each customer.</p>
+{% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/app/register">
+  <label class="f">Business name<input name="business_name" value="{{ form.business_name or '' }}" maxlength="120" required autofocus></label>
+  <label class="f">Work email<input type="email" name="email" value="{{ form.email or '' }}" autocomplete="username" required></label>
+  <label class="f">Password <span class="desc">at least 8 characters</span><input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+  <label class="f">Repeat password<input type="password" name="confirm" minlength="8" autocomplete="new-password" required></label>
+  <button type="submit">Create account</button>
+</form>
+<p class="small section">Already have an account? <a href="/app/login">Log in</a></p>
+{% endblock %}

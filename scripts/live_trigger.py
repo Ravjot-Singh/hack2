@@ -45,7 +45,7 @@ async def main() -> None:
                 TelegramUser.tenant_id == tenant_id, TelegramUser.chat_id == args.chat))
         elif args.customer:
             customer_id = s.scalar(select(Customer.id).where(
-                Customer.tenant_id == tenant_id, Customer.external_ref == f"{args.tenant[:2].upper()}{args.customer:05d}"))
+                Customer.tenant_id == tenant_id, Customer.external_ref == f"{cfg.prefix}{args.customer:05d}"))
     bc = BotContext(cfg, tenant_id)
     now = datetime.now(IST)
 

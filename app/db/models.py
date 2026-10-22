@@ -15,12 +15,37 @@ class Base(DeclarativeBase):
 
 
 class Tenant(Base):
+    """One business (store) using the platform, with its own bot, catalog, groups and rules."""
+
     __tablename__ = "tenants"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    status: Mapped[str] = mapped_column(String(12), default="active", server_default="active")
+    brand_voice: Mapped[str] = mapped_column(String(200), default="friendly, warm, short sentences, a few emoji",
+                                             server_default="friendly, warm, short sentences, a few emoji")
+    currency: Mapped[str] = mapped_column(String(3), default="INR", server_default="INR")
+    coupon_prefix: Mapped[str | None] = mapped_column(String(4))
+    bot_token_enc: Mapped[str | None] = mapped_column(Text)  # Fernet-encrypted BotFather token
+    bot_username: Mapped[str | None] = mapped_column(String(64))
+    catalog: Mapped[dict | None] = mapped_column(JSON)  # {category: {"label": str, "margin_pct": float}}
+    segments_yaml: Mapped[str | None] = mapped_column(Text)
+    config_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # bump on edits
+
+
+class Account(Base):
+    """A business's login (one per business for now)."""
+
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), unique=True)
+    email: Mapped[str] = mapped_column(String(160), unique=True, index=True)  # stored lower-case
+    password_hash: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Customer(Base):
@@ -28,22 +53,25 @@ class Customer(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    external_ref: Mapped[str] = mapped_column(String(20))
+    external_ref: Mapped[str] = mapped_column(String(40))  # the business's own customer id
     name: Mapped[str] = mapped_column(String(80))
-    gender: Mapped[str] = mapped_column(String(1))
-    age: Mapped[int] = mapped_column(Integer)
-    birthday: Mapped[date] = mapped_column(Date)
-    city: Mapped[str] = mapped_column(String(40))
-    state: Mapped[str] = mapped_column(String(40))
-    city_tier: Mapped[int] = mapped_column(Integer)
-    device: Mapped[str] = mapped_column(String(10))
+    phone: Mapped[str | None] = mapped_column(String(20))
+    email: Mapped[str | None] = mapped_column(String(160))
+    # Uploaded data may not have these; synthetic data always does.
+    gender: Mapped[str | None] = mapped_column(String(1))
+    age: Mapped[int | None] = mapped_column(Integer)
+    birthday: Mapped[date | None] = mapped_column(Date)
+    city: Mapped[str | None] = mapped_column(String(40))
+    state: Mapped[str | None] = mapped_column(String(40))
+    city_tier: Mapped[int | None] = mapped_column(Integer)
+    device: Mapped[str | None] = mapped_column(String(10))
     signup_date: Mapped[date] = mapped_column(Date)
-    loyalty_tier: Mapped[str] = mapped_column(String(10))
-    points_balance: Mapped[int] = mapped_column(Integer)
-    # Hidden generator traits, kept only to evaluate segmentation. The offer engine must not read them;
-    # it works from observed behaviour (customer_features).
-    price_sensitivity: Mapped[float] = mapped_column(Float)
-    true_segment: Mapped[str] = mapped_column(String(20))
+    loyalty_tier: Mapped[str] = mapped_column(String(10), default="bronze", server_default="bronze")
+    points_balance: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Hidden generator traits (synthetic data only), kept to evaluate segmentation and to simulate responses.
+    # The offer engine must not read them; it works from observed behaviour (customer_features).
+    price_sensitivity: Mapped[float | None] = mapped_column(Float)
+    true_segment: Mapped[str | None] = mapped_column(String(20))
 
 
 class Product(Base):

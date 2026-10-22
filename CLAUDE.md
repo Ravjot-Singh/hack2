@@ -16,9 +16,17 @@ every AI choice before anything is sent.
 - `app/main.py` — FastAPI app (health checks; later Telegram webhooks + admin dashboard). One Render web service.
 - `app/config.py` — settings from env/.env. `postgresql://` URLs are rewritten to the psycopg v3 driver.
 - `app/db/` — SQLAlchemy models, session, Alembic migrations (`alembic upgrade head`).
-- `app/tenants/registry.py` — multi-tenant registry. Each `tenants/<slug>/` folder = one store + one bot
-  (`tenant.yaml`, later `rules.yaml`, `catalog.yaml`). `_template/` is copied to add a bot. Every business
-  table carries `tenant_id`.
+- `app/tenants/registry.py` — businesses live in the `tenants` table (name, brand voice, coupon prefix, encrypted
+  bot token, catalog JSON, segments YAML, `config_version`). `tenants/<slug>/` folders are *file tenants* (the
+  ShopKart demo) imported by `sync_tenants` at startup; their token may still come from an env var.
+  `get_tenants()` (5 s cache) returns `TenantConfig` for both; use `cfg.prefix` for coupon/customer prefixes and
+  `TEMPLATE_DIR` (ShopKart) for template files. `create_tenant` starts a new business from ShopKart's catalog +
+  groups; rules default to `policy.default_rules(catalog)`. Every business table carries `tenant_id`.
+- `app/security.py` — scrypt password hashes; Fernet encryption of bot tokens (`TOKEN_ENCRYPTION_KEY`).
+- `app/portal/` — operator portal at `/app` (session cookie via `SESSION_SECRET`): register / login (5 failures
+  per 15 min lock) / logout, Home (numbers, setup checklist, latest activity). `current_business` dependency
+  scopes every page to the session's business and checks same-origin on POST. Refuses to run on a public server
+  with placeholder secrets. Demo login: `python scripts/create_account.py --tenant shopkart --email ...`.
 - `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →
   daily demand → orders, carts, browsing, points), `loader.py` (replaces one tenant's rows, shifts ids),
   `summary.py` (realism report). `customers.true_segment` and `customers.price_sensitivity` are hidden generator
@@ -87,7 +95,9 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 
 ## Build stages
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
-6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅  10. Deploy (Render) + README
+6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅
+Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers
+P3 deals  P4 data upload  P5 settings  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order

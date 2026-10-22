@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if welcome %}Welcome, {{ biz.tenant.name }}!{% else %}Home{% endif %}</h1>
+    <p>{{ now.strftime('%A, %d %B') }} · what's happening with your offers today.</p>
+  </div>
+</div>
+
+{% if not setup_done %}
+<div class="card" style="margin-bottom: 16px">
+  <h2>Get set up</h2>
+  <ul class="checklist">
+    {% for c in checklist %}
+    <li class="{{ 'done' if c.done }}">
+      <span class="check {{ 'done' if c.done }}" aria-hidden="true">{{ '✓' if c.done else loop.index }}</span>
+      <div><b>{{ c.title }}</b><div class="small muted">{{ c.text }}</div></div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="grid g4">
+  <div class="card tile">
+    <div class="label">Customers</div>
+    <div class="value">{{ "{:,}".format(stats.customers) }}</div>
+    <div class="note">{{ stats.linked }} reachable on Telegram{% if stats.opted_out %} · {{ stats.opted_out }} paused offers{% endif %}</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Offers sent today</div>
+    <div class="value">{{ stats.sent_today }}</div>
+    <div class="note">{{ stats.sent_live }} in total</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Claimed by customers</div>
+    <div class="value">{{ stats.claimed }}</div>
+    <div class="note">{% if stats.sent_live %}{{ (stats.claimed / stats.sent_live)|pct }} of offers sent{% else %}no offers yet{% endif %} · {{ stats.dismissed }} said "not now"</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Today's offer budget</div>
+    <div class="value">{{ stats.budget_used|rs }}</div>
+    <div class="note">of {{ stats.daily_budget|rs }} · counts the most each sent offer could cost you</div>
+    <div class="meter" role="img" aria-label="Budget used"><div style="width: {{ [100, 100 * stats.budget_used / stats.daily_budget if stats.daily_budget else 0]|min }}%"></div></div>
+  </div>
+</div>
+
+<div class="card section">
+  <h2>Latest activity</h2>
+  {% if feed %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>When</th><th>Customer</th><th>Why</th><th>Result</th><th>Offer</th><th>Details</th></tr></thead>
+    <tbody>
+    {% for r in feed %}{% set d = r.d %}
+    <tr>
+      <td class="num">{{ r.created_at|dt }}</td>
+      <td>{{ r.name }}<div class="desc">{{ r.ref }} · {{ segment_labels.get(d.segment, d.segment) }}</div></td>
+      <td>{{ TRIGGER_LABELS.get(d.trigger, d.trigger.replace('event:', '').replace('_', ' ')|capitalize) }}</td>
+      <td class="feed-result">
+        <span class="badge {{ d.outcome }}">{{ RESULT_LABELS.get(d.outcome, d.outcome) }}</span>
+        {% if d.response == 'claimed' %}<div><span class="badge claimed">Claimed</span></div>
+        {% elif d.response == 'dismissed' %}<div><span class="badge">Not now</span></div>{% endif %}
+      </td>
+      <td>{% if d.offer_key %}{{ offer_labels.get(d.offer_key, d.offer_key) }}<div class="desc">{{ d.headline or '' }}</div>{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="small">
+        {% if d.outcome == 'sent' %}<span class="channel">{{ '📱 Sent on Telegram' if r.on_telegram else '✉ Not on Telegram: coupon saved' }}</span>
+          {% if d.coupon_code %}<div class="desc">Code {{ d.coupon_code }}</div>{% endif %}
+        {% elif d.outcome == 'holdout' %}Held back on purpose so you can measure what offers add.
+        {% else %}{{ d.block_reason or '' }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">Nothing yet. Offers your customers receive, and the ones the rules held back, will show up here.</p>
+  {% endif %}
+</div>
+{% endblock %}

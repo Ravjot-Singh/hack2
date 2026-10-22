@@ -4,6 +4,7 @@ from app.config import get_settings
 from app.db.models import Base
 from app.db.session import _session_factory, get_engine
 from app.rules import policy as policy_module
+from app.tenants.registry import clear_tenant_cache
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +18,7 @@ def sqlite_db(tmp_path, monkeypatch):
     for cached in (get_settings, get_engine, _session_factory):
         cached.cache_clear()
     policy_module._cache.clear()  # rules saved in one test's DB must not leak into the next
+    clear_tenant_cache()
     Base.metadata.create_all(get_engine())
     yield
     get_engine().dispose()

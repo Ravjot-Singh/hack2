@@ -1,0 +1,14 @@
+{% extends "_auth_base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<h1>Log in</h1>
+<p class="muted">Personalised offers for your customers on Telegram, within the limits you set.</p>
+{% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/app/login">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label class="f">Email<input type="email" name="email" value="{{ email }}" autocomplete="username" required autofocus></label>
+  <label class="f">Password<input type="password" name="password" autocomplete="current-password" required></label>
+  <button type="submit">Log in</button>
+</form>
+<p class="small section">New here? <a href="/app/register">Create a business account</a></p>
+{% endblock %}

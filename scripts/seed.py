@@ -20,7 +20,7 @@ from app.data.loader import load_dataset  # noqa: E402
 from app.data.summary import format_report, realism_metrics  # noqa: E402
 from app.db.models import Tenant  # noqa: E402
 from app.db.session import get_engine, session_scope  # noqa: E402
-from app.tenants.registry import get_tenants, sync_tenants  # noqa: E402
+from app.tenants.registry import TEMPLATE_DIR, get_tenants, sync_tenants  # noqa: E402
 
 
 def main() -> None:
@@ -38,8 +38,8 @@ def main() -> None:
     cfg = tenants[args.tenant]
 
     t0 = time.time()
-    ds = generate(cfg.path / "catalog.yaml", args.customers, args.seed, args.as_of,
-                  ref_prefix=args.tenant[:2].upper())
+    ds = generate((cfg.path or TEMPLATE_DIR) / "catalog.yaml", args.customers, args.seed, args.as_of,
+                  ref_prefix=cfg.prefix)
     last_day = ds.as_of - timedelta(days=1)
     print(f"Generated in {time.time() - t0:.1f}s (history {ds.start} .. {last_day}, seed {ds.seed})\n")
     print(format_report(realism_metrics(ds)))

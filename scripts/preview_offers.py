@@ -42,7 +42,7 @@ def main() -> None:
         q = select(CustomerFeature.__table__, Customer.external_ref, Customer.name).join(
             Customer, Customer.id == CustomerFeature.customer_id).where(CustomerFeature.tenant_id == tenant_id)
         if args.customer:
-            q = q.where(Customer.external_ref == f"{args.tenant[:2].upper()}{args.customer:05d}")
+            q = q.where(Customer.external_ref == f"{get_tenants()[args.tenant].prefix}{args.customer:05d}")
         rows = conn.execute(q).all()
     if not rows:
         sys.exit("No feature snapshot found. Run scripts/build_features.py first.")

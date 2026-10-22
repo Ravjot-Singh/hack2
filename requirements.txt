@@ -14,4 +14,6 @@ Faker==33.1.0
 Jinja2==3.1.5
 python-multipart==0.0.20
 httpx==0.28.1
+itsdangerous==2.2.0
+cryptography==43.0.3
 pytest==8.3.4

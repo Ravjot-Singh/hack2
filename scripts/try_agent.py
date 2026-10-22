@@ -41,7 +41,7 @@ def main() -> None:
     cfg = get_tenants()[args.tenant]
     policy = current_policy(args.tenant, cfg.path)
     now = datetime.now(IST)
-    ref = f"{args.tenant[:2].upper()}{args.customer:05d}"
+    ref = f"{cfg.prefix}{args.customer:05d}"
     with session_scope() as s:
         tenant_id = s.scalar(select(Tenant.id).where(Tenant.slug == args.tenant))
         cust = s.scalar(select(Customer).where(Customer.tenant_id == tenant_id, Customer.external_ref == ref))

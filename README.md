@@ -163,7 +163,21 @@ Simulated customers respond according to their *hidden* persona, which the engin
 tests the engine's estimates against a ground truth. The budget always goes to the most valuable offers first.
 Simulated decisions never count toward real users' limits or the live budget, and never call the LLM.
 
-## Dashboard for the marketing team
+## Operator portal (for businesses)
+
+Any e-commerce business can create an account at `/app/register` and run its offers from `/app`. The portal is
+being built in phases. Available now: sign-up and log-in, and a Home page with today's numbers, a setup
+checklist, and the latest activity (which offers went to whom and why, or which rule held one back).
+
+To give the ShopKart demo store a login (you'll be asked for a password):
+
+```bash
+python scripts/create_account.py --tenant shopkart --email demo@shopkart.example
+```
+
+Add `SESSION_SECRET` and `TOKEN_ENCRYPTION_KEY` (any long random strings) to `.env`.
+
+## Developer console (/admin)
 
 ```bash
 uvicorn app.main:app --reload       # then open http://127.0.0.1:8000/admin

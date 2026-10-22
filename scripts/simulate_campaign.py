@@ -60,7 +60,7 @@ def main() -> None:
             now = datetime.combine(start + timedelta(days=i), dtime(11), IST)
             t0 = time.time()
             with session_scope() as s:
-                r = run_simulated_campaign(s, args.tenant, tenant_id, policy, cfg.name, args.tenant[:2].upper(),
+                r = run_simulated_campaign(s, args.tenant, tenant_id, policy, cfg.name, cfg.prefix,
                                            now, args.segment, seed=i, daily_budget=args.budget)
             top = ", ".join(f"{k} {v}" for k, v in r.by_offer.most_common(4))
             print(f"{now:%a %d %b}: {r.eligible:,} eligible, sent {r.sent:,} (worst-case Rs {r.liability:,}), "

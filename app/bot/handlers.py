@@ -42,7 +42,7 @@ class BotContext:
 
     @property
     def coupon_prefix(self) -> str:
-        return self.tenant.slug[:2].upper()
+        return self.tenant.prefix
 
 
 def _ctx(context: ContextTypes.DEFAULT_TYPE) -> BotContext:

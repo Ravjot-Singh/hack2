@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ biz.tenant.name if biz else 'Offer Engine' }}{% endblock %} · Offer Engine</title>
+  <link rel="stylesheet" href="/admin/static/style.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/admin/static/portal.css?v={{ asset_version }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="biz"><b>{{ biz.tenant.name }}</b><span>Offer Engine</span></div>
+    <a class="nav {{ 'on' if nav == 'home' }}" href="/app"><span class="nav-ico">⌂</span>Home</a>
+    {% block nav_extra %}{% endblock %}
+    <div class="foot">
+      {{ biz.email }}
+      <form method="post" action="/app/logout"><button class="secondary" type="submit">Log out</button></form>
+    </div>
+  </aside>
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

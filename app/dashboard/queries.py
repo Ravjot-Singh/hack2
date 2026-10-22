@@ -89,7 +89,7 @@ def segment_customers(s: Session, tenant_id: int, segment: str, limit: int = 25)
 
 def decisions(s: Session, tenant_id: int, simulated: bool | None, outcome: str | None, offer: str | None,
               limit: int, offset: int) -> list[dict]:
-    q = (select(OfferDecision, Customer.external_ref, Customer.name, TelegramUser.tg_name)
+    q = (select(OfferDecision, Customer.external_ref, Customer.name, TelegramUser.tg_name, TelegramUser.chat_id)
          .join(Customer, Customer.id == OfferDecision.customer_id)
          .outerjoin(TelegramUser, TelegramUser.customer_id == OfferDecision.customer_id)
          .where(OfferDecision.tenant_id == tenant_id))
@@ -100,8 +100,9 @@ def decisions(s: Session, tenant_id: int, simulated: bool | None, outcome: str |
     if offer:
         q = q.where(OfferDecision.offer_key == offer)
     out = []
-    for d, ref, name, tg in s.execute(q.order_by(OfferDecision.id.desc()).limit(limit).offset(offset)):
-        out.append({"d": d, "ref": ref, "name": name, "tg_name": tg, "created_at": _aware(d.created_at)})
+    for d, ref, name, tg, chat in s.execute(q.order_by(OfferDecision.id.desc()).limit(limit).offset(offset)):
+        out.append({"d": d, "ref": ref, "name": name, "tg_name": tg, "on_telegram": chat is not None,
+                    "created_at": _aware(d.created_at)})
     return out
 
 

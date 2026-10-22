@@ -20,7 +20,7 @@ from sqlalchemy import select  # noqa: E402
 from app.data.generator import IST  # noqa: E402
 from app.db.models import Customer, Tenant  # noqa: E402
 from app.db.session import get_engine  # noqa: E402
-from app.features.segments import load_segment_config  # noqa: E402
+from app.rules.policy import current_policy  # noqa: E402
 from app.features.store import refresh_features  # noqa: E402
 from app.tenants.registry import get_tenants  # noqa: E402
 
@@ -32,7 +32,7 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg_t = get_tenants()[args.tenant]
-    seg_cfg = load_segment_config(cfg_t.path / "segments.yaml")
+    seg_cfg = current_policy(args.tenant, cfg_t.path).segments
     as_of = (args.as_of.replace(tzinfo=IST) if args.as_of else datetime.now(IST))
 
     t0 = time.time()

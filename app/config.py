@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     admin_user: str = "admin"
     admin_password: str = "change-me"
 
+    # Operator portal: signs login cookies / encrypts businesses' bot tokens. Must be set on a public server.
+    session_secret: str = "change-me"
+    token_encryption_key: str = "change-me"
+
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
     llm_enabled: bool = False
