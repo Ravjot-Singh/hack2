@@ -9,7 +9,7 @@ Built for the J-PAL South Asia Punjab Jobs AI Bootcamp, Hackathon 2.
 - **Synthetic data only**: realistic customers, orders, browsing, carts and reward points are generated locally.
 - **Multi-tenant**: each store gets its own bot, rules and catalog under `tenants/<slug>/`.
 
-> Status: Stage 6 (AI agent + validator). Sections below grow as stages land.
+> Status: Stage 7 (triggers & measurement). Sections below grow as stages land.
 
 ## Setup
 
@@ -132,6 +132,36 @@ cached per customer per day; tests and simulations never call Groq.
 ```bash
 python scripts/try_agent.py --tenant shopkart --customer 17 --llm   # one real call, prints the message
 ```
+
+## Triggers
+
+Offers can start three ways, and every rule applies to each:
+- **On demand**: a person taps *Get my offer* or sends `/offers`.
+- **Live events**: something happens to a customer (an abandoned cart, points about to expire, a birthday coming
+  up). Their profile updates and the engine reacts at once, pushing the offer to Telegram. At night the offer is
+  queued and sent when quiet hours end.
+- **Campaigns**: an admin runs one for every customer or every linked chat.
+
+```bash
+python scripts/live_trigger.py event --tenant shopkart --chat <telegram chat id> --kind cart_abandoned
+python scripts/live_trigger.py campaign --tenant shopkart
+```
+
+## Measuring whether offers work
+
+10% of customers (`holdout_pct` in rules.yaml) are a **holdout group**: they never get proactive offers, and
+for each one we record the offer they *would* have got. Comparing customers who got an offer with matched
+holdout customers shows what the offers really added: the conversion uplift with a 95% confidence interval,
+the extra profit after discounts, and the rupees returned per rupee of discount, by offer and by segment.
+
+```bash
+python scripts/simulate_campaign.py --tenant shopkart --days 7 --reset        # real daily budget
+python scripts/simulate_campaign.py --tenant shopkart --days 1 --reset --budget 5000000   # fund every offer
+```
+
+Simulated customers respond according to their *hidden* persona, which the engine never sees, so the report
+tests the engine's estimates against a ground truth. The budget always goes to the most valuable offers first.
+Simulated decisions never count toward real users' limits or the live budget, and never call the LLM.
 
 ## Tests
 ```bash

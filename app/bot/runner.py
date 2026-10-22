@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 
 from sqlalchemy import select
 from telegram import Update
 from telegram.ext import Application
 
 from app.bot.handlers import COMMANDS, BotContext, build_application
+from app.data.generator import IST
 from app.db.models import Tenant
 from app.db.session import session_scope
 from app.rules.policy import load_policy
 from app.tenants.registry import get_tenants, sync_tenants
+from app.triggers.events import dispatch_deferred
 
 log = logging.getLogger(__name__)
 
@@ -47,9 +50,29 @@ async def start_bots(bots: dict[str, Application], webhook_base: str | None, sec
             await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         log.info("Bot @%s for tenant %s is running (%s).", app.bot.username, slug,
                  "webhook" if webhook_base else "polling")
+        _tasks.append(asyncio.create_task(_dispatch_loop(app)))
+
+
+_tasks: list[asyncio.Task] = []
+
+
+async def _dispatch_loop(app: Application) -> None:
+    """Every minute, send offers that quiet hours held back."""
+    bc = app.bot_data["ctx"]
+    while True:
+        try:
+            sent = await dispatch_deferred(bc, app.bot, datetime.now(IST))
+            if sent:
+                log.info("Sent %d deferred offer(s) for %s", sent, bc.tenant.slug)
+        except Exception:
+            log.exception("Deferred dispatch failed")
+        await asyncio.sleep(60)
 
 
 async def stop_bots(bots: dict[str, Application]) -> None:
+    for t in _tasks:
+        t.cancel()
+    _tasks.clear()
     for app in bots.values():
         if app.updater and app.updater.running:
             await app.updater.stop()

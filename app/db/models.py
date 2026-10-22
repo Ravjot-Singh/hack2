@@ -185,6 +185,8 @@ class OfferDecision(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     trigger: Mapped[str] = mapped_column(String(30))  # on_demand | event:<kind> | campaign
+    # Simulated decisions (campaign simulations over synthetic customers) never count toward live limits/budget.
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     segment: Mapped[str] = mapped_column(String(30))
     outcome: Mapped[str] = mapped_column(String(12))  # sent | no_offer | holdout | deferred
     block_reason: Mapped[str | None] = mapped_column(String(300))
@@ -210,6 +212,21 @@ class OfferDecision(Base):
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
     response: Mapped[str | None] = mapped_column(String(12))  # claimed | dismissed
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OfferOutcome(Base):
+    """What happened after a decision (simulated for synthetic customers): did they buy, at what cost to us."""
+
+    __tablename__ = "offer_outcomes"
+
+    decision_id: Mapped[int] = mapped_column(ForeignKey("offer_decisions.id"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    purchased: Mapped[bool] = mapped_column(Boolean)
+    redeemed: Mapped[bool] = mapped_column(Boolean)  # used the offer (only possible if one was sent)
+    order_value: Mapped[int] = mapped_column(Integer)
+    discount_cost: Mapped[int] = mapped_column(Integer)
+    margin_rs: Mapped[int] = mapped_column(Integer)  # gross margin of the order before the discount
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class LLMCall(Base):

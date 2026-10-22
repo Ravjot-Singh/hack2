@@ -13,6 +13,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 
 from app.data.generator import IST
 from app.delivery import templates
+from app.delivery.push import offer_keyboard
 from app.offers import service
 from app.rules.policy import TenantPolicy
 from app.tenants.registry import TenantConfig
@@ -57,14 +58,6 @@ def _segment_keyboard(bc: BotContext) -> InlineKeyboardMarkup:
 
 MENU = InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Get my offer", callback_data="offer"),
                               InlineKeyboardButton("🔄 Switch shopper", callback_data="switch")]])
-
-
-def _offer_keyboard(decision_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Claim", callback_data=f"claim:{decision_id}"),
-         InlineKeyboardButton("Not now", callback_data=f"dismiss:{decision_id}")],
-        [InlineKeyboardButton("🔕 Stop offers", callback_data="stop")],
-    ])
 
 
 async def _user(update: Update, bc: BotContext) -> dict:
@@ -124,7 +117,7 @@ async def offers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if result.kind == "repeat":
             await update.effective_chat.send_message("Your current offer is still live 👇")
         msg = await update.effective_chat.send_message(result.message, parse_mode=ParseMode.HTML,
-                                                       reply_markup=_offer_keyboard(result.decision_id))
+                                                       reply_markup=offer_keyboard(result.decision_id))
         await asyncio.to_thread(service.set_message_id, result.decision_id, msg.message_id)
     else:
         await update.effective_chat.send_message(templates.no_offer(result.kind, result.next_time),

@@ -21,6 +21,7 @@ from app.db.session import session_scope
 from app.delivery.templates import offer_message, rs
 from app.features.customer import _aware
 from app.features.store import refresh_features
+from app.measurement.holdout import in_holdout
 from app.rules.engine import Candidate, CustomerContext, SentOffer, evaluate
 from app.rules.policy import TenantPolicy
 
@@ -29,7 +30,7 @@ COUPON_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
 
 @dataclass
 class OfferResult:
-    kind: str  # offer | repeat | opted_out | too_soon | none
+    kind: str  # offer | deferred | repeat | opted_out | too_soon | none | holdout
     decision_id: int | None = None
     message: str | None = None
     next_time: datetime | None = None
@@ -96,7 +97,8 @@ def load_profile(tenant_id: int, customer_id: int, policy: TenantPolicy, now: da
 
 def _recent_offers(s: Session, customer_id: int, now: datetime, days: int) -> list[SentOffer]:
     rows = s.execute(select(OfferDecision.offer_key, OfferDecision.created_at).where(
-        OfferDecision.customer_id == customer_id, OfferDecision.outcome.in_(("sent", "deferred")),
+        OfferDecision.customer_id == customer_id, OfferDecision.simulated.is_(False),
+        OfferDecision.outcome.in_(("sent", "deferred")),
         OfferDecision.created_at > now - timedelta(days=days)))
     return [SentOffer(k, _aware(t)) for k, t in rows]
 
@@ -104,8 +106,8 @@ def _recent_offers(s: Session, customer_id: int, now: datetime, days: int) -> li
 def budget_used_today(s: Session, tenant_id: int, now: datetime) -> int:
     midnight = datetime.combine(now.date(), time(0), now.tzinfo)
     return int(s.scalar(select(func.coalesce(func.sum(OfferDecision.liability_rs), 0)).where(
-        OfferDecision.tenant_id == tenant_id, OfferDecision.outcome.in_(("sent", "deferred")),
-        OfferDecision.created_at >= midnight)) or 0)
+        OfferDecision.tenant_id == tenant_id, OfferDecision.simulated.is_(False),
+        OfferDecision.outcome.in_(("sent", "deferred")), OfferDecision.created_at >= midnight)) or 0)
 
 
 def _next_allowed(recent: list[SentOffer], policy: TenantPolicy, now: datetime) -> datetime | None:
@@ -137,14 +139,16 @@ def intro_context(cust_name: str, store: str, c: Candidate, f: dict, policy: Ten
 
 
 def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store: str, coupon_prefix: str,
-                  trigger: str, now: datetime, voice: str = "friendly", llm: JsonLLM | None = groq_json
-                  ) -> OfferResult:
-    """llm=None forces the rules + template path (used by simulations so Groq is never called)."""
+                  trigger: str, now: datetime, voice: str = "friendly", llm: JsonLLM | None = groq_json,
+                  tenant_slug: str = "") -> OfferResult:
+    """llm=None forces the rules + template path. Proactive triggers (anything but on_demand) respect the
+    holdout group; a person asking for an offer is always answered."""
     lim = policy.rules.limits
     with session_scope() as s:
         if trigger == "on_demand":  # re-show a live offer instead of making a new one
             live = s.scalar(select(OfferDecision).where(
-                OfferDecision.customer_id == customer_id, OfferDecision.outcome == "sent",
+                OfferDecision.customer_id == customer_id, OfferDecision.simulated.is_(False),
+                OfferDecision.outcome == "sent",
                 OfferDecision.response.is_(None), OfferDecision.valid_until > now,
             ).order_by(OfferDecision.created_at.desc()).limit(1))
             if live is not None:
@@ -169,6 +173,15 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
             if decision.customer_block:
                 return OfferResult("too_soon", rec.id, next_time=_next_allowed(recent, policy, now))
             return OfferResult("none", rec.id)
+
+        if trigger != "on_demand" and in_holdout(tenant_slug, customer_id, policy.rules.measurement.holdout_pct):
+            b = decision.best
+            rec.outcome, rec.offer_key, rec.headline, rec.category = "holdout", b.offer_key, b.headline, b.category
+            rec.expected_net_rs, rec.valid_until = b.expected_net_rs, b.valid_until
+            rec.block_reason = "Holdout group: no offer, used to measure what offers really add."
+            s.add(rec)
+            s.flush()
+            return OfferResult("holdout", rec.id)
 
         # AI picks from the rule-approved shortlist and writes the intro; the validator re-checks it, and the
         # rules' own top pick + template is used if the AI is off, over budget, failing or rejected.
@@ -195,12 +208,38 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
             rec.terms = c.terms
         rec.message = offer_message(intro, c, coupon)
         s.flush()
-        return OfferResult("offer", rec.id, rec.message)
+        return OfferResult("deferred" if deferred else "offer", rec.id, rec.message, next_time=rec.send_after)
 
 
 def set_message_id(decision_id: int, message_id: int) -> None:
     with session_scope() as s:
-        s.get(OfferDecision, decision_id).telegram_message_id = message_id
+        d = s.get(OfferDecision, decision_id)
+        d.telegram_message_id = message_id
+        if d.outcome == "deferred":
+            d.outcome = "sent"
+
+
+def linked_users(tenant_id: int) -> list[tuple[int, int, bool]]:
+    """(chat_id, customer_id, opted_out) for every chat linked to a persona."""
+    with session_scope() as s:
+        return [tuple(r) for r in s.execute(select(TelegramUser.chat_id, TelegramUser.customer_id,
+                                                   TelegramUser.opted_out).where(
+            TelegramUser.tenant_id == tenant_id, TelegramUser.customer_id.is_not(None)))]
+
+
+def chat_for_customer(customer_id: int) -> int | None:
+    with session_scope() as s:
+        return s.scalar(select(TelegramUser.chat_id).where(TelegramUser.customer_id == customer_id))
+
+
+def due_deferred(tenant_id: int, now: datetime) -> list[tuple[int, int, str]]:
+    """(decision_id, chat_id, message) for deferred offers whose quiet hours are over."""
+    with session_scope() as s:
+        rows = s.execute(select(OfferDecision.id, TelegramUser.chat_id, OfferDecision.message, TelegramUser.opted_out)
+                         .join(TelegramUser, TelegramUser.customer_id == OfferDecision.customer_id)
+                         .where(OfferDecision.tenant_id == tenant_id, OfferDecision.outcome == "deferred",
+                                OfferDecision.simulated.is_(False), OfferDecision.send_after <= now))
+        return [(i, chat, msg) for i, chat, msg, opted_out in rows if not opted_out]
 
 
 def respond(tenant_id: int, chat_id: int, decision_id: int, response: str, now: datetime) -> tuple[str, dict | None]:

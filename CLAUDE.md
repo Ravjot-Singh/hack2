@@ -52,7 +52,20 @@ every AI choice before anything is sent.
   shortlist; intro may not contain numbers, money, %, number words, timing claims, extra promises, links, HTML,
   injection echoes, type-mismatched "free"/"points", or other categories). Default model `openai/gpt-oss-120b`
   (reasoning_effort low). Try one customer: `python scripts/try_agent.py --tenant shopkart --customer 17 [--llm]`.
-- Decision pipeline: features → rules engine shortlist → (holdout, Stage 7) → AI chooser → validator → deliver → log.
+- `app/measurement/` — `holdout.py` (stable hash, `holdout_pct` from rules.yaml; applies to proactive triggers
+  only, never to on-demand), `outcomes.py` (simulated world response; MAY use hidden persona/price sensitivity
+  because it plays reality, not the engine), `metrics.py` (sent vs matched holdout: uplift ± 95% CI, extra
+  profit, Rs returned per Rs of discount, by offer and segment; plus real Telegram stats).
+- `app/offers/campaign.py` — batch simulated campaign: budget goes to highest expected-profit offers first
+  (fallback to a cheaper shortlisted offer that fits); holdout matched to the funded slice via the day's
+  expected-profit cutoff; holdout decisions are "virtual sends" for later days' gaps/caps; budget-stopped
+  customers are counted, not stored. `simulated=True` decisions never affect live limits/budget; linked real
+  chats are excluded. `python scripts/simulate_campaign.py --tenant shopkart [--days 7] [--budget N] [--reset]`.
+- `app/triggers/events.py` — live events (`cart_abandoned`, `points_expiring`, `birthday`) mutate data, refresh
+  that customer's features and run the pipeline with trigger `event:<kind>`; pushes to linked chats; quiet hours
+  → `deferred`, sent by the runner's 60s dispatch loop. `scripts/live_trigger.py event|campaign ...`.
+- Decision pipeline: features → rules engine shortlist → holdout (proactive only) → AI chooser → validator →
+  deliver/push → log (+ simulated outcome for simulations).
 
 ## Commands
 ```
@@ -65,7 +78,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 
 ## Build stages
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
-6. Agent + validator ✅  7. Triggers & measurement  8. Offer tuning  9. Dashboard  10. Deploy (Render) + README
+6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning  9. Dashboard  10. Deploy (Render) + README
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order
@@ -75,6 +88,10 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
   validity windows and priorities in `tenants/shopkart/rules.yaml`.
 - Consider tiered values by customer value (e.g. bigger win-back for formerly high spenders).
 - Re-check message wording/appeal of templates once the AI intro (Stage 6) is in.
+- Use `scripts/simulate_campaign.py` results: "Points expiring" shows no clear uplift (-2% ± 23%) and "Loyalty
+  bonus" to loyal high-value customers returns < Rs 1 per Rs 1 — rethink or retarget them.
+- Calibrate the simulated response model (`app/measurement/outcomes.py`): uplifts like +32 pts for cart comeback
+  look generous vs. real-world benchmarks (typically a few points); lower `offer_strength`/`RELEVANCE`.
 
 ## Conventions
 - Python 3.11, type hints, pydantic for config/rule schemas.
