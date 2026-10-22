@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ ctx.tenant.name }} · Offer engine</title>
+  <link rel="stylesheet" href="/admin/static/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">{{ ctx.tenant.name }} <span>· Offer engine</span></div>
+    <nav class="tabs">
+      {% set q = "?t=" ~ ctx.tenant.slug %}
+      <a href="/admin{{ q }}" class="{{ 'on' if page == 'overview' }}">Overview</a>
+      <a href="/admin/results{{ q }}" class="{{ 'on' if page == 'results' }}">Results</a>
+      <a href="/admin/segments{{ q }}" class="{{ 'on' if page == 'segments' }}">Segments</a>
+      <a href="/admin/decisions{{ q }}" class="{{ 'on' if page == 'decisions' }}">Decisions</a>
+      <a href="/admin/rules{{ q }}" class="{{ 'on' if page == 'rules' }}">Rules</a>
+      <a href="/admin/actions{{ q }}" class="{{ 'on' if page == 'actions' }}">Actions</a>
+    </nav>
+    <div class="top-right">
+      <form action="/admin/customer" method="get" class="inline">
+        <input type="hidden" name="t" value="{{ ctx.tenant.slug }}">
+        <input name="q" placeholder="Customer, e.g. SH00017" aria-label="Find customer" size="18">
+      </form>
+      {% if ctx.tenants|length > 1 %}
+      <form method="get">
+        <select name="t" onchange="this.form.submit()" aria-label="Store">
+          {% for t in ctx.tenants %}<option value="{{ t.slug }}" {{ 'selected' if t.slug == ctx.tenant.slug }}>{{ t.name }}</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

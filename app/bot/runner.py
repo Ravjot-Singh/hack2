@@ -14,7 +14,6 @@ from app.bot.handlers import COMMANDS, BotContext, build_application
 from app.data.generator import IST
 from app.db.models import Tenant
 from app.db.session import session_scope
-from app.rules.policy import load_policy
 from app.tenants.registry import get_tenants, sync_tenants
 from app.triggers.events import dispatch_deferred
 
@@ -32,7 +31,7 @@ def build_bots(webhook: bool) -> dict[str, Application]:
         if not cfg.bot_token:
             log.warning("Tenant %s has no bot token in %s; its bot is not started.", slug, cfg.bot_token_env)
             continue
-        bots[slug] = build_application(BotContext(cfg, ids[slug], load_policy(cfg.path)), webhook)
+        bots[slug] = build_application(BotContext(cfg, ids[slug]), webhook)
     return bots
 
 

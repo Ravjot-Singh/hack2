@@ -23,7 +23,6 @@ from app.bot.handlers import BotContext  # noqa: E402
 from app.data.generator import IST  # noqa: E402
 from app.db.models import Customer, Tenant, TelegramUser  # noqa: E402
 from app.db.session import session_scope  # noqa: E402
-from app.rules.policy import load_policy  # noqa: E402
 from app.tenants.registry import get_tenants  # noqa: E402
 from app.triggers.events import EVENTS, fire_event, run_live_campaign  # noqa: E402
 
@@ -47,7 +46,7 @@ async def main() -> None:
         elif args.customer:
             customer_id = s.scalar(select(Customer.id).where(
                 Customer.tenant_id == tenant_id, Customer.external_ref == f"{args.tenant[:2].upper()}{args.customer:05d}"))
-    bc = BotContext(cfg, tenant_id, load_policy(cfg.path))
+    bc = BotContext(cfg, tenant_id)
     now = datetime.now(IST)
 
     async with Bot(cfg.bot_token) as bot:

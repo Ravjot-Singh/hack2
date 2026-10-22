@@ -22,7 +22,7 @@ from app.data.generator import IST  # noqa: E402
 from app.db.models import Customer, CustomerFeature, Tenant  # noqa: E402
 from app.db.session import get_engine  # noqa: E402
 from app.rules.engine import CustomerContext, evaluate  # noqa: E402
-from app.rules.policy import load_policy  # noqa: E402
+from app.rules.policy import current_policy  # noqa: E402
 from app.tenants.registry import get_tenants  # noqa: E402
 
 
@@ -34,7 +34,7 @@ def main() -> None:
     ap.add_argument("--budget-used", type=float, default=0)
     args = ap.parse_args()
 
-    policy = load_policy(get_tenants()[args.tenant].path)
+    policy = current_policy(args.tenant, get_tenants()[args.tenant].path)
     now = args.at.replace(tzinfo=IST) if args.at else datetime.now(IST)
 
     with get_engine().connect() as conn:

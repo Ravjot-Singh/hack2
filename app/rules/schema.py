@@ -140,7 +140,11 @@ class RulesError(ValueError):
 
 
 def load_rules(path: Path, margins: dict[str, float], segment_keys: set[str]) -> RulesConfig:
-    rules = RulesConfig(**yaml.safe_load(path.read_text(encoding="utf-8")))
+    return parse_rules(yaml.safe_load(path.read_text(encoding="utf-8")), margins, segment_keys)
+
+
+def parse_rules(data: dict, margins: dict[str, float], segment_keys: set[str]) -> RulesConfig:
+    rules = RulesConfig(**data)
     problems = check_rules(rules, margins, segment_keys)
     if problems:
         raise RulesError("rules.yaml has problems:\n- " + "\n- ".join(problems))

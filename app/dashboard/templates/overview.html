@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>{% endblock %}
+{% block content %}
+<h1>Overview</h1>
+<p class="sub">Live activity from real Telegram users, and the simulated campaigns used to measure what offers add.</p>
+
+<div class="grid g4">
+  <div class="card tile">
+    <div class="label">Synthetic customers</div>
+    <div class="value">{{ "{:,}".format(stats.customers) }}</div>
+    <div class="note">{{ stats.linked }} linked to Telegram users{% if stats.opted_out %}, {{ stats.opted_out }} paused offers{% endif %}</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Live offers sent today</div>
+    <div class="value">{{ stats.sent_today }}</div>
+    <div class="note">{{ stats.sent_live }} in total · {{ stats.claimed }} claimed · {{ stats.dismissed }} not now</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Live budget used today</div>
+    <div class="value">{{ stats.budget_used|rs }}</div>
+    <div class="note">of {{ stats.daily_budget|rs }} (worst case if every offer is used)</div>
+    <div class="meter" role="img" aria-label="Budget used"><div style="width: {{ [100, 100 * stats.budget_used / stats.daily_budget if stats.daily_budget else 0]|min }}%"></div></div>
+  </div>
+  <div class="card tile">
+    <div class="label">AI (Groq) today</div>
+    <div class="value">{{ stats.llm_calls_today }} <span class="small muted">/ {{ stats.llm_limit }} calls</span></div>
+    <div class="note">
+      {% if stats.llm_enabled %}On{% else %}Off: offers use the rules' top pick + templates{% endif %}
+      · {{ stats.by_ai }} offers written by AI · {{ stats.ai_rejected }} AI answers blocked by the validator
+    </div>
+  </div>
+</div>
+
+<div class="grid g2 section">
+  <div class="card">
+    <h2>Simulated campaign decisions per day</h2>
+    {% if sim_chart.labels %}
+    <div class="chart-box"><canvas id="simChart" aria-label="Simulated decisions per day" role="img"></canvas></div>
+    <div class="legend" id="simLegend"></div>
+    <details class="small section"><summary>Show as table</summary>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Day</th>{% for k in sim_chart.series %}<th class="num">{{ OUTCOME_LABELS[k] }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for d in sim_chart.labels %}{% set i = loop.index0 %}<tr><td>{{ d }}</td>{% for k, v in sim_chart.series.items() %}<td class="num">{{ v[i] }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table></div>
+    </details>
+    {% else %}<p class="muted">No simulations yet. Run one from <a href="/admin/actions?t={{ ctx.tenant.slug }}">Actions</a>.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Customers by segment</h2>
+    {% set maxn = (segs.values()|map(attribute='n')|max) if segs else 1 %}
+    {% for s in ctx.policy.segments.segments %}{% set st = segs.get(s.key) %}{% if st %}
+    <div class="hbar-row" title="{{ s.label }}: {{ st.n }} customers, avg churn risk {{ st.churn|pct }}">
+      <a class="lbl" href="/admin/segments?t={{ ctx.tenant.slug }}&seg={{ s.key }}">{{ s.label }}</a>
+      <div class="track"><div class="fill" style="width: {{ 100 * st.n / maxn }}%"></div></div>
+      <div class="val">{{ "{:,}".format(st.n) }}</div>
+    </div>
+    {% endif %}{% endfor %}
+  </div>
+</div>
+
+{% if live_chart.labels %}
+<div class="card section">
+  <h2>Live decisions per day (real Telegram users)</h2>
+  <div class="chart-box"><canvas id="liveChart" aria-label="Live decisions per day" role="img"></canvas></div>
+  <div class="legend" id="liveLegend"></div>
+</div>
+{% endif %}
+
+<div class="card section">
+  <h2>Latest live decisions</h2>
+  {% include "_decisions_table.html" with context %}
+  <p class="small"><a href="/admin/decisions?t={{ ctx.tenant.slug }}">All decisions →</a></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/admin/static/charts.js"></script>
+<script>
+  stackedBars("simChart", "simLegend", {{ sim_chart|tojson }});
+  stackedBars("liveChart", "liveLegend", {{ live_chart|tojson }});
+</script>
+{% endblock %}

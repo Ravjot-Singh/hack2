@@ -153,7 +153,7 @@ def test_cart_event_updates_features_and_triggers_cart_offer(world):
     assert "left items in their cart" in desc
     with session_scope() as s:
         assert s.get(CustomerFeature, cid).abandoned_carts_7d >= 1
-    bc = BotContext(CFG, 1, POLICY)
+    bc = BotContext(CFG, 1)
     out = asyncio.run(fire_event(bc, None, cid, "points_expiring", NOON))
     with session_scope() as s:
         assert s.get(CustomerFeature, cid).points_expiring_30d >= 150

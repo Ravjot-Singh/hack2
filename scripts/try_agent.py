@@ -24,7 +24,7 @@ from app.db.models import Customer, Tenant  # noqa: E402
 from app.db.session import session_scope  # noqa: E402
 from app.offers.service import _features, intro_context  # noqa: E402
 from app.rules.engine import CustomerContext, evaluate  # noqa: E402
-from app.rules.policy import load_policy  # noqa: E402
+from app.rules.policy import current_policy  # noqa: E402
 from app.tenants.registry import get_tenants  # noqa: E402
 
 
@@ -39,7 +39,7 @@ def main() -> None:
         get_settings.cache_clear()
 
     cfg = get_tenants()[args.tenant]
-    policy = load_policy(cfg.path)
+    policy = current_policy(args.tenant, cfg.path)
     now = datetime.now(IST)
     ref = f"{args.tenant[:2].upper()}{args.customer:05d}"
     with session_scope() as s:

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Segments</h1>
+<p class="sub">How customers are grouped. Groups are checked top to bottom and a customer joins the first one that fits.
+Defined in <code>tenants/{{ ctx.tenant.slug }}/segments.yaml</code>.</p>
+
+<div class="card">
+<div class="table-wrap"><table>
+  <thead><tr><th>Group</th><th>Who</th><th>Rule</th><th class="num">Customers</th><th class="num">Orders / yr</th>
+    <th class="num">Spend / yr</th><th class="num">Churn risk</th><th class="num">Would buy anyway</th><th class="num">Deal affinity</th></tr></thead>
+  <tbody>
+  {% for s in ctx.policy.segments.segments %}{% set st = stats.get(s.key, {}) %}
+  <tr>
+    <td><a href="/admin/segments?t={{ ctx.tenant.slug }}&seg={{ s.key }}"><b>{{ s.label }}</b></a></td>
+    <td class="small">{{ s.description }}</td>
+    <td class="small">{% if s.when %}{% for k, v in s.when.items() %}<div><code>{{ k }}</code> {{ v }}</div>{% endfor %}{% else %}<span class="muted">everyone else</span>{% endif %}</td>
+    <td class="num">{{ "{:,}".format(st.get('n', 0)) }}</td>
+    <td class="num">{{ '%.1f'|format(st.get('orders', 0)) }}</td>
+    <td class="num">{{ st.get('spend', 0)|rs }}</td>
+    <td class="num">{{ st.get('churn', 0)|pct }}</td>
+    <td class="num">{{ st.get('buy_anyway', 0)|pct }}</td>
+    <td class="num">{{ st.get('deal', 0)|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+</div>
+
+{% if seg %}
+<div class="card section">
+  <h2>{{ ctx.segment_labels.get(seg, seg) }}: top customers by spend</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Customer</th><th>City</th><th class="num">Orders / yr</th><th class="num">Spend / yr</th><th class="num">Last order</th><th class="num">Churn risk</th><th>Why this group</th></tr></thead>
+    <tbody>{% for m in members %}
+      <tr><td><a href="/admin/customer/{{ m.id }}?t={{ ctx.tenant.slug }}">{{ m.external_ref }}</a> <span class="desc">{{ m.name }}</span></td>
+        <td>{{ m.city }}</td><td class="num">{{ m.orders_365 }}</td><td class="num">{{ m.monetary_365|rs }}</td>
+        <td class="num">{{ (m.recency_days ~ ' days ago') if m.recency_days is not none else 'never' }}</td>
+        <td class="num">{{ m.churn_risk|pct }}</td><td class="small">{{ m.segment_reason }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}

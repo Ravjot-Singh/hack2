@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Actions</h1>
+<p class="sub">Run campaigns and trigger live events. Every action still goes through every rule.</p>
+
+{% if result %}
+<div class="flash ok"><b>{{ result.title }}</b><ul>{% for l in result.lines %}<li>{{ l }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<div class="grid g2">
+  <div class="card">
+    <h2>Simulate a campaign</h2>
+    <p class="small">Daily campaigns over the synthetic customers, with simulated responses and a holdout group. Real Telegram
+      users are left out, the AI is never called, and nothing counts toward live limits. Results appear under
+      <a href="/admin/results?t={{ ctx.tenant.slug }}">Results</a>.</p>
+    <form method="post" action="/admin/actions/simulate?t={{ ctx.tenant.slug }}" class="inline">
+      <label class="f">Days<input type="number" name="days" value="7" min="1" max="7"></label>
+      <label class="f">Daily budget (₹)<input type="number" name="budget" placeholder="{{ ctx.policy.rules.limits.daily_budget_rs }}"></label>
+      <label class="f" style="flex-direction:row; gap:6px; align-items:center"><input type="checkbox" name="reset" checked> Replace earlier simulations</label>
+      <button type="submit">Run simulation</button>
+    </form>
+    <p class="desc">Takes about 5–10 seconds per day. Leave the budget empty to use the rules' daily budget; set it very high to
+      fund every eligible offer and measure each one.</p>
+  </div>
+
+  <div class="card">
+    <h2>Live campaign</h2>
+    <p class="small">Runs the engine for every Telegram user linked to a shopper and pushes the offer to them now,
+      subject to the holdout group, the gap between offers, the weekly cap, opt-outs and quiet hours.</p>
+    <form method="post" action="/admin/actions/live-campaign?t={{ ctx.tenant.slug }}"
+          onsubmit="return confirm('Send offers to all linked Telegram users now?')">
+      <button type="submit">Send live campaign ({{ chats|length }} linked users)</button>
+    </form>
+  </div>
+</div>
+
+<div class="card section">
+  <h2>Trigger a live event</h2>
+  <p class="small">Simulates something happening to a customer. Their profile updates and the engine reacts at once; linked
+    Telegram users get the offer pushed within seconds.</p>
+  {% if chats %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Telegram user</th><th>Shopper</th><th>Segment</th><th>Last seen</th><th>Event</th></tr></thead>
+    <tbody>{% for c in chats %}
+      <tr><td>📱 {{ c.tg_name or c.chat_id }}{% if c.opted_out %} <span class="badge">paused offers</span>{% endif %}</td>
+        <td><a href="/admin/customer/{{ c.id }}?t={{ ctx.tenant.slug }}">{{ c.external_ref }}</a> <span class="desc">{{ c.name }}</span></td>
+        <td>{{ ctx.segment_labels.get(c.segment, c.segment or '–') }}</td>
+        <td class="num">{{ c.last_seen_at|dt }}</td>
+        <td><form method="post" action="/admin/actions/event?t={{ ctx.tenant.slug }}" class="inline">
+          <input type="hidden" name="customer_id" value="{{ c.id }}">
+          <select name="kind" aria-label="Event">{% for k, v in events.items() %}<option value="{{ k }}">{{ k.replace('_', ' ') }}: {{ v }}</option>{% endfor %}</select>
+          <button type="submit">Fire</button></form></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No Telegram users linked yet. Share the bot and ask people to press Start.</p>{% endif %}
+</div>
+{% endblock %}

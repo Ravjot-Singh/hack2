@@ -1,0 +1,29 @@
+{% set rows = latest if latest is defined else rows %}
+{% if rows %}
+<div class="table-wrap"><table>
+  <thead><tr><th>When</th><th>Customer</th><th>Trigger</th><th>Segment</th><th>Result</th><th>Offer</th><th>Why / notes</th></tr></thead>
+  <tbody>
+  {% for r in rows %}{% set d = r.d %}
+  <tr>
+    <td class="num">{{ r.created_at|dt }}</td>
+    <td><a href="/admin/customer/{{ d.customer_id }}?t={{ ctx.tenant.slug }}">{{ r.ref }}</a><div class="desc">{{ r.name }}{% if r.tg_name %} · 📱 {{ r.tg_name }}{% endif %}</div></td>
+    <td>{{ d.trigger.replace('event:', 'event: ').replace('_', ' ') }}{% if d.simulated %} <span class="desc">(sim)</span>{% endif %}</td>
+    <td>{{ ctx.segment_labels.get(d.segment, d.segment) }}</td>
+    <td>
+      <span class="badge {{ d.outcome }}">{{ OUTCOME_LABELS.get(d.outcome, d.outcome) }}</span>
+      {% if d.response %}<div><span class="badge {{ d.response }}">{{ d.response }}</span></div>{% endif %}
+    </td>
+    <td>
+      {% if d.offer_key %}{{ ctx.offer_labels.get(d.offer_key, d.offer_key) }}<div class="desc">{{ d.headline or '' }}</div>{% else %}<span class="muted">–</span>{% endif %}
+      {% if d.chosen_by == 'ai' %}<span class="badge ai">AI pick</span>{% endif %}
+    </td>
+    <td class="small">
+      {% if d.block_reason %}{{ d.block_reason }}{% endif %}
+      {% if d.ai_reason %}<div>AI: {{ d.ai_reason }}</div>{% endif %}
+      {% if d.ai_rejected_reason %}<div class="{{ 'badge warn' if d.ai_rejected_reason.startswith('AI answer rejected') }}">{{ d.ai_rejected_reason }}</div>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}<p class="muted">Nothing yet.</p>{% endif %}

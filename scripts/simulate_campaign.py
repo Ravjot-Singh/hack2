@@ -24,7 +24,7 @@ from app.db.models import OfferDecision, OfferOutcome, Tenant  # noqa: E402
 from app.db.session import get_engine, session_scope  # noqa: E402
 from app.measurement.metrics import format_report, measure  # noqa: E402
 from app.offers.campaign import run_simulated_campaign  # noqa: E402
-from app.rules.policy import load_policy  # noqa: E402
+from app.rules.policy import current_policy  # noqa: E402
 from app.tenants.registry import get_tenants  # noqa: E402
 
 
@@ -40,7 +40,7 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = get_tenants()[args.tenant]
-    policy = load_policy(cfg.path)
+    policy = current_policy(args.tenant, cfg.path)  # includes rules saved from the dashboard
     with session_scope() as s:
         tenant_id = s.scalar(select(Tenant.id).where(Tenant.slug == args.tenant))
         if args.reset:

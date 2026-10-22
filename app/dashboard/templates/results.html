@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% macro uplift_svg(c, dom) -%}
+  {%- set ci = c.ci95 if c.ci95 == c.ci95 else 0 -%}
+  {%- set x0 = 100 -%}{%- set xu = 100 + 100 * c.uplift / dom -%}
+  {%- set lo = 100 + 100 * (c.uplift - ci) / dom -%}{%- set hi = 100 + 100 * (c.uplift + ci) / dom -%}
+  <svg class="uplift" viewBox="0 0 200 22" preserveAspectRatio="none" role="img"
+       aria-label="Uplift {{ (c.uplift * 100)|round(1) }} points, plus or minus {{ (ci * 100)|round(1) }}">
+    <title>{{ '%+.1f'|format(c.uplift * 100) }} pts (95% range {{ '%+.1f'|format((c.uplift - ci) * 100) }} to {{ '%+.1f'|format((c.uplift + ci) * 100) }})</title>
+    <line x1="100" x2="100" y1="0" y2="22" stroke="var(--axis)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <rect x="{{ [x0, xu]|min }}" y="7" width="{{ ([x0, xu]|max) - ([x0, xu]|min) }}" height="8" rx="1.5"
+          fill="{{ 'var(--series-1)' if c.uplift >= 0 else 'var(--neg)' }}"/>
+    {% if ci %}<line x1="{{ [0, lo]|max }}" x2="{{ [200, hi]|min }}" y1="11" y2="11" stroke="var(--ink-2)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>{% endif %}
+  </svg>
+{%- endmacro %}
+{% macro rows(items, labels, dom) %}
+  {% for key, c in items %}
+  <tr>
+    <td>{{ labels.get(key, key) }}</td>
+    <td class="num">{{ "{:,}".format(c.treat.n) }}</td>
+    <td class="num">{{ "{:,}".format(c.hold.n) }}</td>
+    <td class="num">{{ c.treat.conv|pct(1) }}</td>
+    <td class="num">{{ c.hold.conv|pct(1) }}</td>
+    <td class="num">{{ '%+.1f'|format(c.uplift * 100) }} pts{% if c.significant %} <span title="Statistically clear">✓</span>{% endif %}</td>
+    <td style="min-width: 160px">{{ uplift_svg(c, dom) }}</td>
+    <td class="num">{{ c.incremental_profit|rs }}</td>
+    <td class="num">{{ c.treat.discounts|rs }}</td>
+    <td class="num">{{ '%.2f'|format(c.return_per_rs) if c.return_per_rs == c.return_per_rs else '–' }}</td>
+  </tr>
+  {% endfor %}
+{% endmacro %}
+{% macro head() %}
+<thead><tr><th></th><th class="num">Got offer</th><th class="num">Holdout</th><th class="num">Bought (offer)</th>
+<th class="num">Bought (holdout)</th><th class="num">Uplift</th><th>Uplift ± 95% range</th><th class="num">Extra profit</th>
+<th class="num">Discounts paid</th><th class="num">₹ back per ₹1</th></tr></thead>
+{% endmacro %}
+
+{% block content %}
+{% set o = r.overall %}
+<h1>Results</h1>
+<p class="sub">Customers who got an offer compared with a <b>holdout group</b>: similar customers deliberately held back.
+The difference is what the offers really added. A ✓ means the uplift is larger than its 95% uncertainty range.</p>
+
+{% if not o.treat.n %}
+<div class="card"><p>No measured campaigns yet. Run a simulation from <a href="/admin/actions?t={{ ctx.tenant.slug }}">Actions</a>.</p></div>
+{% else %}
+<div class="grid g4">
+  <div class="card tile"><div class="label">Bought with an offer</div><div class="value">{{ o.treat.conv|pct(1) }}</div>
+    <div class="note">vs {{ o.hold.conv|pct(1) }} in the holdout ({{ "{:,}".format(o.treat.n) }} vs {{ "{:,}".format(o.hold.n) }} customers)</div></div>
+  <div class="card tile"><div class="label">Uplift</div><div class="value">{{ '%+.1f'|format(o.uplift * 100) }} pts</div>
+    <div class="note">95% range ± {{ (o.ci95 * 100)|round(1) }} pts{% if o.significant %} · statistically clear ✓{% endif %}</div></div>
+  <div class="card tile"><div class="label">Extra profit after discounts</div><div class="value">{{ o.incremental_profit|rs }}</div>
+    <div class="note">discounts paid {{ o.treat.discounts|rs }} · {{ o.treat.redeemed }} of {{ o.treat.sent }} offers used</div></div>
+  <div class="card tile"><div class="label">Engine's estimate vs measured</div><div class="value">{{ o.treat.expected_net|rs }}</div>
+    <div class="note">estimated profit of sent offers; measured {{ o.incremental_profit|rs }}</div></div>
+</div>
+
+{% set ns = namespace(dom=0.02) %}
+{% for c in (r.by_offer.values()|list) + (r.by_segment.values()|list) %}
+  {% set ci = c.ci95 if c.ci95 == c.ci95 else 0 %}
+  {% set ns.dom = [ns.dom, (c.uplift|abs) + ci]|max %}
+{% endfor %}
+
+<div class="card section">
+  <h2>By offer <span class="muted small">(grouped by the best offer the rules found, known for the holdout too)</span></h2>
+  <div class="table-wrap"><table>{{ head() }}<tbody>
+    {{ rows(r.by_offer.items()|sort(attribute='1.treat.n', reverse=true), ctx.offer_labels, ns.dom) }}
+  </tbody></table></div>
+</div>
+
+<div class="card section">
+  <h2>By segment</h2>
+  <div class="table-wrap"><table>{{ head() }}<tbody>
+    {{ rows(r.by_segment.items()|sort(attribute='1.treat.n', reverse=true), ctx.segment_labels, ns.dom) }}
+  </tbody></table></div>
+  <p class="desc">Bars share one scale centred on zero: blue = offers helped, red = fewer purchases than the holdout.
+    The thin line is the 95% range; if it crosses zero, the effect could be chance.</p>
+</div>
+{% endif %}
+
+{% if r.live.get('decisions') %}
+{% set lv = r.live %}
+<div class="card section">
+  <h2>Real Telegram users</h2>
+  <p>{{ lv.decisions }} requests · {{ lv.get('outcome_sent', 0) }} offers sent · {{ lv.get('claimed', 0) }} claimed ·
+    {{ lv.get('dismissed', 0) }} not now · {{ lv.get('chosen_by_ai', 0) }} written by AI ·
+    {{ lv.get('ai_rejected', 0) }} AI answers blocked by the validator · {{ lv.get('outcome_holdout', 0) }} held back (holdout)</p>
+</div>
+{% endif %}
+<p class="desc section">Simulated customers respond according to a hidden persona the engine never sees, so these numbers test the
+engine's guesses against a ground truth.</p>
+{% endblock %}

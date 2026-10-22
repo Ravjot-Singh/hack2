@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Decisions</h1>
+<p class="sub">Every decision the engine made, including "no offer" with the rule that stopped it, and why the AI's answer was used or blocked.</p>
+
+<form method="get" class="inline card">
+  <input type="hidden" name="t" value="{{ ctx.tenant.slug }}">
+  <label class="f">Source
+    <select name="mode">
+      <option value="live" {{ 'selected' if mode == 'live' }}>Real Telegram users</option>
+      <option value="sim" {{ 'selected' if mode == 'sim' }}>Simulated campaigns</option>
+      <option value="all" {{ 'selected' if mode == 'all' }}>All</option>
+    </select></label>
+  <label class="f">Result
+    <select name="outcome"><option value="">Any</option>
+      {% for k, v in OUTCOME_LABELS.items() %}<option value="{{ k }}" {{ 'selected' if outcome == k }}>{{ v }}</option>{% endfor %}
+    </select></label>
+  <label class="f">Offer
+    <select name="offer"><option value="">Any</option>
+      {% for o in ctx.policy.rules.offers %}<option value="{{ o.key }}" {{ 'selected' if offer == o.key }}>{{ o.label }}</option>{% endfor %}
+    </select></label>
+  <button type="submit">Filter</button>
+</form>
+
+<div class="card section">
+  {% include "_decisions_table.html" with context %}
+  <p class="small">
+    {% if pg > 1 %}<a href="?t={{ ctx.tenant.slug }}&mode={{ mode }}&outcome={{ outcome }}&offer={{ offer }}&page={{ pg - 1 }}">← Newer</a> · {% endif %}
+    Page {{ pg }}
+    {% if rows|length == 50 %} · <a href="?t={{ ctx.tenant.slug }}&mode={{ mode }}&outcome={{ outcome }}&offer={{ offer }}&page={{ pg + 1 }}">Older →</a>{% endif %}
+  </p>
+</div>
+{% endblock %}

@@ -15,7 +15,7 @@ from app.data.generator import IST
 from app.delivery import templates
 from app.delivery.push import offer_keyboard
 from app.offers import service
-from app.rules.policy import TenantPolicy
+from app.rules.policy import TenantPolicy, current_policy
 from app.tenants.registry import TenantConfig
 
 log = logging.getLogger(__name__)
@@ -34,7 +34,11 @@ COMMANDS = [
 class BotContext:
     tenant: TenantConfig
     tenant_id: int
-    policy: TenantPolicy
+
+    @property
+    def policy(self) -> TenantPolicy:
+        """Always the latest rules (dashboard edits apply within seconds, no restart)."""
+        return current_policy(self.tenant.slug, self.tenant.path)
 
     @property
     def coupon_prefix(self) -> str:

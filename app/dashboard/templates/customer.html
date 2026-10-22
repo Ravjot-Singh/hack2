@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ c.external_ref }} · {{ c.name }}</h1>
+<p class="sub">{{ c.city }} (tier {{ c.city_tier }}) · {{ c.age }} yrs · {{ c.loyalty_tier|title }} member · joined {{ c.signup_date }}
+  {% if chat %} · 📱 linked to a real Telegram user{% endif %}
+  {% if holdout %} · <span class="badge holdout">In holdout group</span>{% endif %}</p>
+
+<div class="grid g3">
+  <div class="card">
+    <h2>{{ seg.label }}</h2>
+    <p class="small">{{ seg.description }}</p>
+    <p class="desc">Why: {{ f.segment_reason }}</p>
+    <dl class="kv small">
+      <dt>Churn risk</dt><dd>{{ f.churn_risk|pct }}</dd>
+      <dt>Would buy anyway (14 days)</dt><dd>{{ f.buy_anyway_prob|pct }}</dd>
+      <dt>Deal affinity</dt><dd>{{ f.deal_affinity|pct }}</dd>
+      <dt>Expected spend, 90 days</dt><dd>{{ f.expected_value_90d|rs }}</dd>
+    </dl>
+  </div>
+  <div class="card">
+    <h2>Behaviour</h2>
+    <dl class="kv small">
+      <dt>Last order</dt><dd>{{ (f.recency_days ~ ' days ago') if f.recency_days is not none else 'none in 12 months' }}</dd>
+      <dt>Orders 30 / 90 / 365 days</dt><dd>{{ f.orders_30 }} / {{ f.orders_90 }} / {{ f.orders_365 }}</dd>
+      <dt>Spend, 12 months</dt><dd>{{ f.monetary_365|rs }} (avg {{ f.aov|rs }})</dd>
+      <dt>Favourite category</dt><dd>{{ ctx.policy.catalog.labels.get(f.top_category, '–') }}</dd>
+      <dt>Discounted orders</dt><dd>{{ f.discount_share|pct }}</dd>
+      <dt>Items returned</dt><dd>{{ f.return_rate|pct }}</dd>
+      <dt>Visits 30 / 90 days</dt><dd>{{ f.sessions_30 }} / {{ f.sessions_90 }}</dd>
+    </dl>
+  </div>
+  <div class="card">
+    <h2>Signals</h2>
+    <dl class="kv small">
+      <dt>Abandoned carts (7 days)</dt><dd>{{ f.abandoned_carts_7d }}{% if f.last_abandoned_cart_value %} · last {{ ctx.policy.catalog.labels.get(f.last_abandoned_cart_category, '') }} {{ f.last_abandoned_cart_value|rs }}{% endif %}</dd>
+      <dt>Points</dt><dd>{{ "{:,}".format(f.points_balance) }}{% if f.points_expiring_30d %} ({{ f.points_expiring_30d }} expiring {{ f.next_points_expiry|dt }}){% endif %}</dd>
+      <dt>Birthday</dt><dd>in {{ f.days_to_birthday }} days</dd>
+      <dt>Profile computed</dt><dd>{{ f.computed_at|dt }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="card section">
+  <h2>If they asked for an offer right now</h2>
+  {% if decision.customer_block %}<p><span class="badge no_offer">No offer</span> {{ decision.customer_block }}</p>{% endif %}
+  {% if decision.eligible %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Rank</th><th>Offer</th><th>What they'd get</th><th>Terms</th><th class="num">Worst-case cost</th><th class="num">Expected profit</th><th>Why it qualifies</th></tr></thead>
+    <tbody>{% for x in decision.eligible %}
+      <tr><td class="num">{{ loop.index }}</td><td><b>{{ x.label }}</b></td><td>{{ x.headline }}</td><td class="small">{{ x.terms }}</td>
+        <td class="num">{{ x.liability_rs|rs }}</td><td class="num">{{ x.expected_net_rs|rs }}</td>
+        <td class="small">{{ x.reasons|join('; ') or 'open to everyone' }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="desc">The AI (when switched on) may pick any of these and write the message; the validator re-checks its pick.</p>
+  {% endif %}
+  {% if decision.blocked %}
+  <details class="section"><summary>Offers the rules blocked ({{ decision.blocked|length }})</summary>
+    <ul class="small">{% for b in decision.blocked %}<li><b>{{ b.label }}</b>: {{ b.reason }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</div>
+
+<div class="card section">
+  <h2>Offer history</h2>
+  {% if history %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>When</th><th>Trigger</th><th>Result</th><th>Offer</th><th>Message / reason</th></tr></thead>
+    <tbody>{% for d in history %}
+      <tr><td class="num">{{ d.created_at|dt }}</td><td>{{ d.trigger }}{% if d.simulated %} <span class="desc">(sim)</span>{% endif %}</td>
+        <td><span class="badge {{ d.outcome }}">{{ OUTCOME_LABELS.get(d.outcome, d.outcome) }}</span>{% if d.response %} <span class="badge {{ d.response }}">{{ d.response }}</span>{% endif %}</td>
+        <td>{{ ctx.offer_labels.get(d.offer_key, '–') if d.offer_key else '–' }}{% if d.chosen_by == 'ai' %} <span class="badge ai">AI</span>{% endif %}<div class="desc">{{ d.coupon_code or '' }}</div></td>
+        <td class="small">
+          {% if d.message and not d.simulated %}<details><summary>Message</summary><div class="offer-msg">{{ d.message|striptags }}</div></details>{% endif %}
+          {{ d.block_reason or '' }}{% if d.ai_rejected_reason %}<div>{{ d.ai_rejected_reason }}</div>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No offers yet.</p>{% endif %}
+</div>
+{% endblock %}

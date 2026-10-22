@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% set lim = data.limits %}
+{% macro num(name, value, step="1", suffix="") -%}
+<input type="number" name="{{ name }}" value="{{ value if value is not none else '' }}" step="{{ step }}">{% if suffix %} <span class="muted small">{{ suffix }}</span>{% endif %}
+{%- endmacro %}
+{% block content %}
+<h1>Offer rules</h1>
+<p class="sub">The limits every offer must respect, and the offers we're willing to make. The AI can only choose among offers
+that pass these rules, and its choice is checked again before anything is sent. Changes apply to the bot within seconds.</p>
+
+{% if saved %}<div class="flash ok">✓ Saved. The bot uses the new rules from now on.</div>{% endif %}
+{% if errors %}<div class="flash err"><b>Not saved: please fix these first.</b><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+
+<form method="post" action="/admin/rules?t={{ ctx.tenant.slug }}">
+<div class="grid g2">
+  <div class="card">
+    <h2>Limits on every offer</h2>
+    <div class="table-wrap"><table>
+      <tr><td>Most one offer can be worth<div class="desc">No single offer can cost us more than this.</div></td>
+          <td>{{ num("limits.max_discount_rs_per_offer", lim.max_discount_rs_per_offer, suffix="₹") }}</td></tr>
+      <tr><td>Daily budget<div class="desc">Total worst-case cost of offers sent per day (if every one is used).</div></td>
+          <td>{{ num("limits.daily_budget_rs", lim.daily_budget_rs, suffix="₹") }}</td></tr>
+      <tr><td>Offers per customer per week<div class="desc">Avoids offer fatigue.</div></td>
+          <td>{{ num("limits.max_offers_per_customer_per_week", lim.max_offers_per_customer_per_week) }}</td></tr>
+      <tr><td>Hours between offers<div class="desc">Minimum gap between any two offers to one person.</div></td>
+          <td>{{ num("limits.min_hours_between_offers", lim.min_hours_between_offers, suffix="h") }}</td></tr>
+      <tr><td>Don't repeat the same offer within<div class="desc">Days before the same offer can be sent again.</div></td>
+          <td>{{ num("limits.same_offer_cooldown_days", lim.same_offer_cooldown_days, suffix="days") }}</td></tr>
+      <tr><td>No discounts if they'd likely buy anyway<div class="desc">Skip money-off offers when the chance they buy in 14 days anyway is above this.</div></td>
+          <td>{{ num("limits.max_buy_anyway_prob_for_discounts", (lim.max_buy_anyway_prob_for_discounts * 100)|round(1), step="1", suffix="%") }}</td></tr>
+      <tr><td>No discounts for frequent returners<div class="desc">Skip money-off offers when they return more than this share of items.</div></td>
+          <td>{{ num("limits.max_return_rate_for_discounts", (lim.max_return_rate_for_discounts * 100)|round(1), step="1", suffix="%") }}</td></tr>
+      <tr><td>Minimum expected profit per offer<div class="desc">Extra margin the offer brings minus discounts paid. Slightly negative allows small win-back investments.</div></td>
+          <td>{{ num("limits.min_expected_net_rs", lim.min_expected_net_rs, suffix="₹") }}</td></tr>
+      <tr><td>Free delivery costs us</td><td>{{ num("limits.delivery_fee_rs", lim.delivery_fee_rs, suffix="₹") }}</td></tr>
+      <tr><td>Quiet hours<div class="desc">No unprompted messages; offers wait until the end.</div></td>
+          <td><input type="time" name="quiet.start" value="{{ lim.quiet_hours.start[:5] }}"> to
+              <input type="time" name="quiet.end" value="{{ lim.quiet_hours.end[:5] }}"></td></tr>
+      <tr><td>Holdout group<div class="desc">Share of customers who never get proactive offers, to measure what offers add.</div></td>
+          <td>{{ num("holdout_pct", data.measurement.holdout_pct, step="1", suffix="%") }}</td></tr>
+    </table></div>
+  </div>
+  <div class="card">
+    <h2>Highest discount per category</h2>
+    <p class="desc">Must stay below the category's margin, or every sale loses money. "Whole store" offers skip categories with a lower cap.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Category</th><th class="num">Margin</th><th>Max discount</th></tr></thead>
+      {% for cat, cap in lim.max_discount_pct.items() %}
+      <tr><td>{{ 'Whole store' if cat == 'any' else ctx.policy.catalog.labels.get(cat, cat) }}</td>
+          <td class="num">{{ (ctx.policy.catalog.margins.get(cat)|string ~ '%') if cat in ctx.policy.catalog.margins else '–' }}</td>
+          <td>{{ num("cap." ~ cat, cap, step="0.5", suffix="%") }}</td></tr>
+      {% endfor %}
+    </table></div>
+  </div>
+</div>
+
+<div class="card section">
+  <h2>Offers</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>On</th><th>Offer</th><th>Amount</th><th>Min order</th><th>Max discount</th><th>Valid for</th><th>Priority</th><th>Who can get it</th></tr></thead>
+    <tbody>
+    {% for o in data.offers %}{% set k = o.key %}
+    <tr>
+      <td><input type="checkbox" name="offer.{{ k }}.enabled" {{ 'checked' if o.enabled }} aria-label="{{ o.label }} on"></td>
+      <td><b>{{ o.label }}</b><div class="desc">{{ o.description }}</div>
+        <div class="desc">{{ {'percent_off': '% off', 'flat_off': '₹ off', 'free_delivery': 'free delivery', 'bonus_points': 'bonus points'}[o.type] }}
+          on {{ {'any': 'whole store', 'from_cart': 'their abandoned cart\'s category', 'top_category': 'their favourite category'}.get(o.category, ctx.policy.catalog.labels.get(o.category, o.category)) }}
+          {% if o.audience %}· when {% for ak, av in o.audience.items() %}<code>{{ ak }} {{ av }}</code> {% endfor %}{% endif %}</div></td>
+      <td>{% if o.type != 'free_delivery' %}{{ num("offer." ~ k ~ ".value", o.value, step="1", suffix={'percent_off': '%', 'flat_off': '₹', 'bonus_points': 'pts'}[o.type]) }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td>{{ num("offer." ~ k ~ ".min_order_value", o.min_order_value, suffix="₹") }}</td>
+      <td>{% if o.type == 'percent_off' %}{{ num("offer." ~ k ~ ".max_discount_rs", o.max_discount_rs, suffix="₹") }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td>{{ num("offer." ~ k ~ ".valid_hours", o.valid_hours, suffix="h") }}</td>
+      <td>{{ num("offer." ~ k ~ ".priority", o.priority) }}</td>
+      <td><div class="segs-checks">
+        <label><input type="checkbox" name="offer.{{ k }}.segments" value="all" {{ 'checked' if 'all' in o.segments }}> Everyone</label>
+        {% for s in ctx.policy.segments.segments %}
+        <label><input type="checkbox" name="offer.{{ k }}.segments" value="{{ s.key }}" {{ 'checked' if s.key in o.segments }}> {{ s.label }}</label>
+        {% endfor %}</div></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="card section">
+  <div class="inline" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap">
+    <label class="f" style="flex:1; min-width:240px">What changed and why (optional)
+      <input name="note" placeholder="e.g. Bigger welcome offer for new customers"></label>
+    <button type="submit">Check and save</button>
+  </div>
+</div>
+</form>
+
+<div class="grid g2 section">
+  <div class="card">
+    <h2>Change history</h2>
+    {% if history %}
+    <table><thead><tr><th>When</th><th>By</th><th>Note</th></tr></thead><tbody>
+      {% for h in history %}<tr><td class="num">{{ h.created_at|dt }}</td><td>{{ h.created_by }}</td><td class="small">{{ h.note or '' }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted small">No edits yet: using <code>tenants/{{ ctx.tenant.slug }}/rules.yaml</code> from the repository.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Files</h2>
+    <p class="small"><a href="/admin/rules.yaml?t={{ ctx.tenant.slug }}">Download the current rules as YAML</a>. Commit it to the repository to make an edit permanent.</p>
+    <form method="post" action="/admin/rules/reset?t={{ ctx.tenant.slug }}" onsubmit="return confirm('Replace the current rules with rules.yaml from the repository?')">
+      <button class="secondary" type="submit">Reset to the repository's rules.yaml</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

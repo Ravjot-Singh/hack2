@@ -229,6 +229,20 @@ class OfferOutcome(Base):
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class RulesVersion(Base):
+    """Rules saved from the dashboard. The newest row wins over tenants/<slug>/rules.yaml (Render's disk is
+    ephemeral, so edits must live in the database). Old rows are the change history."""
+
+    __tablename__ = "rules_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(80))
+    note: Mapped[str | None] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)  # YAML
+
+
 class LLMCall(Base):
     """One call to the LLM (Groq). Used for the daily cap and the dashboard."""
 
