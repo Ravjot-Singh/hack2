@@ -19,6 +19,9 @@ venv/
 data_out/
 .cache/
 
+# Local preview launcher (machine-specific paths)
+.claude/launch.json
+
 # Editors / OS
 .vscode/
 .idea/

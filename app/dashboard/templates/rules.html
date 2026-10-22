@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% set lim = data.limits %}
+{% macro clean(v) -%}{{ v|int if (v is number and v == v|int) else (v if v is not none else '') }}{%- endmacro %}
 {% macro num(name, value, step="1", suffix="") -%}
-<input type="number" name="{{ name }}" value="{{ value if value is not none else '' }}" step="{{ step }}">{% if suffix %} <span class="muted small">{{ suffix }}</span>{% endif %}
+<span class="numf"><input type="number" name="{{ name }}" value="{{ clean(value) }}" step="{{ step }}">{% if suffix %}<span class="muted small">{{ suffix }}</span>{% endif %}</span>
 {%- endmacro %}
 {% block content %}
 <h1>Offer rules</h1>
@@ -65,7 +66,7 @@ that pass these rules, and its choice is checked again before anything is sent. 
       <td><b>{{ o.label }}</b><div class="desc">{{ o.description }}</div>
         <div class="desc">{{ {'percent_off': '% off', 'flat_off': '₹ off', 'free_delivery': 'free delivery', 'bonus_points': 'bonus points'}[o.type] }}
           on {{ {'any': 'whole store', 'from_cart': 'their abandoned cart\'s category', 'top_category': 'their favourite category'}.get(o.category, ctx.policy.catalog.labels.get(o.category, o.category)) }}
-          {% if o.audience %}· when {% for ak, av in o.audience.items() %}<code>{{ ak }} {{ av }}</code> {% endfor %}{% endif %}</div></td>
+          {% if o.audience %}· when {% for ak, av in o.audience.items() %}<code>{{ ak }} {{ clean(av) }}</code> {% endfor %}{% endif %}</div></td>
       <td>{% if o.type != 'free_delivery' %}{{ num("offer." ~ k ~ ".value", o.value, step="1", suffix={'percent_off': '%', 'flat_off': '₹', 'bonus_points': 'pts'}[o.type]) }}{% else %}<span class="muted">–</span>{% endif %}</td>
       <td>{{ num("offer." ~ k ~ ".min_order_value", o.min_order_value, suffix="₹") }}</td>
       <td>{% if o.type == 'percent_off' %}{{ num("offer." ~ k ~ ".max_discount_rs", o.max_discount_rs, suffix="₹") }}{% else %}<span class="muted">–</span>{% endif %}</td>

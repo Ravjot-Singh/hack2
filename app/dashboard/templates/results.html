@@ -21,7 +21,7 @@
     <td class="num">{{ c.treat.conv|pct(1) }}</td>
     <td class="num">{{ c.hold.conv|pct(1) }}</td>
     <td class="num">{{ '%+.1f'|format(c.uplift * 100) }} pts{% if c.significant %} <span title="Statistically clear">✓</span>{% endif %}</td>
-    <td style="min-width: 160px">{{ uplift_svg(c, dom) }}</td>
+    <td style="width: 180px; min-width: 140px">{{ uplift_svg(c, dom) }}</td>
     <td class="num">{{ c.incremental_profit|rs }}</td>
     <td class="num">{{ c.treat.discounts|rs }}</td>
     <td class="num">{{ '%.2f'|format(c.return_per_rs) if c.return_per_rs == c.return_per_rs else '–' }}</td>
@@ -54,10 +54,10 @@ The difference is what the offers really added. A ✓ means the uplift is larger
     <div class="note">estimated profit of sent offers; measured {{ o.incremental_profit|rs }}</div></div>
 </div>
 
+{# One shared scale sized to the uplifts (not the widest ranges, which come from tiny groups); whiskers clip. #}
 {% set ns = namespace(dom=0.02) %}
 {% for c in (r.by_offer.values()|list) + (r.by_segment.values()|list) %}
-  {% set ci = c.ci95 if c.ci95 == c.ci95 else 0 %}
-  {% set ns.dom = [ns.dom, (c.uplift|abs) + ci]|max %}
+  {% set ns.dom = [ns.dom, (c.uplift|abs) * 1.25]|max %}
 {% endfor %}
 
 <div class="card section">

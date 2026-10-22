@@ -167,7 +167,8 @@ input, select, textarea, button {
   font: inherit; color: var(--ink); background: var(--surface);
   border: 1px solid var(--axis); border-radius: 8px; padding: 6px 8px;
 }
-input[type=number] { width: 100%; max-width: 120px; }
+input[type=number] { width: 84px; }
+.numf { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 input[type=checkbox] { width: auto; }
 button, .btn {
   background: var(--accent); color: #fff; border-color: transparent; padding: 7px 14px; cursor: pointer;
@@ -182,6 +183,6 @@ button:hover { filter: brightness(1.05); }
 .pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .offer-msg { white-space: pre-wrap; background: var(--surface-2); border-radius: 8px; padding: 10px; font-size: 13px; }
 details summary { cursor: pointer; color: var(--accent); }
-.segs-checks { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+.segs-checks { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; min-width: 280px; }
 .segs-checks label { white-space: nowrap; }
 .desc { color: var(--muted); font-size: 12px; }

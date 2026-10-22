@@ -64,6 +64,15 @@ every AI choice before anything is sent.
 - `app/triggers/events.py` — live events (`cart_abandoned`, `points_expiring`, `birthday`) mutate data, refresh
   that customer's features and run the pipeline with trigger `event:<kind>`; pushes to linked chats; quiet hours
   → `deferred`, sent by the runner's 60s dispatch loop. `scripts/live_trigger.py event|campaign ...`.
+- `app/rules/policy.py` — `current_policy(slug, dir)`: rules saved from the dashboard (`rules_versions` table,
+  newest wins over rules.yaml) are picked up by every process within ~10 s; `save_rules` validates first.
+  `BotContext.policy` is a live property. Scripts use `current_policy` too.
+- `app/dashboard/` — admin UI at `/admin` (FastAPI + Jinja + Chart.js, tokens/palette from the dataviz skill):
+  Overview, Results (uplift vs holdout with CI bars), Segments, Decisions log, Customer page ("what would they
+  get now" + blocked reasons + history), Rules editor (form → validated → saved version + history; reset to
+  rules.yaml), Actions (simulate campaign, live campaign, fire event). HTTP Basic auth (`ADMIN_USER` /
+  `ADMIN_PASSWORD`; refuses `change-me` when PUBLIC_BASE_URL is set) + same-origin check on every POST.
+  Static links carry `?v=<mtime>` for cache busting.
 - Decision pipeline: features → rules engine shortlist → holdout (proactive only) → AI chooser → validator →
   deliver/push → log (+ simulated outcome for simulations).
 
@@ -72,13 +81,13 @@ every AI choice before anything is sent.
 pip install -r requirements.txt
 alembic upgrade head                 # create/upgrade tables in DATABASE_URL (Neon)
 python scripts/run_bot.py            # run all tenant bots locally (polling)
-uvicorn app.main:app --reload        # run the web app (starts bots by webhook only if PUBLIC_BASE_URL is set)
+uvicorn app.main:app --reload        # web app + dashboard at /admin (starts bots by webhook only if PUBLIC_BASE_URL is set)
 pytest                               # tests use a throwaway SQLite DB, never Neon, Telegram or Groq
 ```
 
 ## Build stages
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
-6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning  9. Dashboard  10. Deploy (Render) + README
+6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅  10. Deploy (Render) + README
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order

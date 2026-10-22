@@ -1,4 +1,4 @@
-"""FastAPI entry point: health checks and Telegram webhooks (admin dashboard comes in a later stage).
+"""FastAPI entry point: health checks, Telegram webhooks and the admin dashboard (/admin).
 
 Bots start here only when PUBLIC_BASE_URL is set (Render). Locally, run scripts/run_bot.py (polling) instead.
 """
@@ -8,11 +8,14 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from telegram import Update
 
 from app.bot.runner import build_bots, start_bots, stop_bots
 from app.config import get_settings
+from app.dashboard.routes import STATIC_DIR, router as dashboard_router
 from app.db.session import get_engine, session_scope
 from app.tenants.registry import get_tenants, sync_tenants
 
@@ -36,6 +39,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Personalised Offer Engine", lifespan=lifespan)
+app.mount("/admin/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.include_router(dashboard_router)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse("/admin")
 
 
 @app.get("/health")

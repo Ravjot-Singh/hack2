@@ -9,7 +9,7 @@ Built for the J-PAL South Asia Punjab Jobs AI Bootcamp, Hackathon 2.
 - **Synthetic data only**: realistic customers, orders, browsing, carts and reward points are generated locally.
 - **Multi-tenant**: each store gets its own bot, rules and catalog under `tenants/<slug>/`.
 
-> Status: Stage 7 (triggers & measurement). Sections below grow as stages land.
+> Status: Stage 9 (dashboard). Next: deploy to Render. Sections below grow as stages land.
 
 ## Setup
 
@@ -162,6 +162,29 @@ python scripts/simulate_campaign.py --tenant shopkart --days 1 --reset --budget 
 Simulated customers respond according to their *hidden* persona, which the engine never sees, so the report
 tests the engine's estimates against a ground truth. The budget always goes to the most valuable offers first.
 Simulated decisions never count toward real users' limits or the live budget, and never call the LLM.
+
+## Dashboard for the marketing team
+
+```bash
+uvicorn app.main:app --reload       # then open http://127.0.0.1:8000/admin
+```
+
+Log in with `ADMIN_USER` / `ADMIN_PASSWORD` from `.env`. The pages:
+
+- **Overview**: customers, live offers today, budget used, AI usage, campaign decisions per day, segment sizes,
+  and the latest decisions.
+- **Results**: what the offers really added compared with the holdout group, with uncertainty ranges, extra
+  profit and rupees returned per rupee of discount, by offer and by segment.
+- **Segments**: each group in plain words, its rule, its size and behaviour, and its top customers.
+- **Decisions**: every decision, including "no offer" with the rule that stopped it and why an AI answer was
+  used or blocked.
+- **Customer page**: the full profile, what the customer would get right now (ranked, with reasons), every offer
+  the rules blocked and why, and their offer history.
+- **Rules**: edit limits, discount caps per category, and each offer's amount, minimum order, validity, priority
+  and audience. Every save is checked first: a discount above a category's margin, for example, is refused with
+  a clear message. Saved rules reach the bot within seconds and every change is kept in a history.
+- **Actions**: run a simulated campaign, send a live campaign to linked Telegram users, or fire a live event
+  (abandoned cart, points expiring, birthday) at a user.
 
 ## Tests
 ```bash

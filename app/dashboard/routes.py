@@ -42,7 +42,7 @@ OUTCOME_LABELS = {"sent": "Sent", "holdout": "Holdout", "no_offer": "No offer", 
 def _rs(v) -> str:
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return "–"
-    return f"₹{v:,.0f}"
+    return f"−₹{-v:,.0f}" if round(v) < 0 else f"₹{v:,.0f}"
 
 
 def _pct(v, digits: int = 0) -> str:
@@ -59,8 +59,12 @@ def _dt(v) -> str:
     return v.astimezone(IST).strftime("%d %b %H:%M")
 
 
+STATIC_DIR = Path(__file__).parent / "static"
+# Cache-busting stamp for /admin/static links, so a deploy never serves stale CSS/JS.
+ASSET_VERSION = str(int(max(p.stat().st_mtime for p in STATIC_DIR.iterdir())))
+
 templates.env.filters.update(rs=_rs, pct=_pct, dt=_dt)
-templates.env.globals.update(OUTCOME_LABELS=OUTCOME_LABELS)
+templates.env.globals.update(OUTCOME_LABELS=OUTCOME_LABELS, asset_version=ASSET_VERSION)
 
 
 @dataclass

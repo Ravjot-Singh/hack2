@@ -8,7 +8,7 @@
   <div class="card tile">
     <div class="label">Synthetic customers</div>
     <div class="value">{{ "{:,}".format(stats.customers) }}</div>
-    <div class="note">{{ stats.linked }} linked to Telegram users{% if stats.opted_out %}, {{ stats.opted_out }} paused offers{% endif %}</div>
+    <div class="note">{{ stats.linked }} linked to Telegram user{{ 's' if stats.linked != 1 }}{% if stats.opted_out %}, {{ stats.opted_out }} paused offers{% endif %}</div>
   </div>
   <div class="card tile">
     <div class="label">Live offers sent today</div>
@@ -73,7 +73,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/admin/static/charts.js"></script>
+<script src="/admin/static/charts.js?v={{ asset_version }}"></script>
 <script>
   stackedBars("simChart", "simLegend", {{ sim_chart|tojson }});
   stackedBars("liveChart", "liveLegend", {{ live_chart|tojson }});

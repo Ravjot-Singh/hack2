@@ -29,7 +29,7 @@
       subject to the holdout group, the gap between offers, the weekly cap, opt-outs and quiet hours.</p>
     <form method="post" action="/admin/actions/live-campaign?t={{ ctx.tenant.slug }}"
           onsubmit="return confirm('Send offers to all linked Telegram users now?')">
-      <button type="submit">Send live campaign ({{ chats|length }} linked users)</button>
+      <button type="submit">Send live campaign ({{ chats|length }} linked user{{ 's' if chats|length != 1 }})</button>
     </form>
   </div>
 </div>
