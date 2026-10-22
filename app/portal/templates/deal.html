@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ deal.name }}{% endblock %}
+{% block head %}{% if deal.status == 'sending' %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block content %}
+{% set p = deal.progress or {} %}
+<div class="page-head">
+  <div><p class="small"><a href="/app/deals">← Deals</a></p>
+    <h1>{{ deal.name }}</h1>
+    <p>{{ types[spec.type] }}{% if spec.type == 'percent_off' %}, up to {{ spec.value|int }}% (max {{ spec.max_discount_rs|rs }} per order){% elif spec.type == 'flat_off' %}: {{ spec.value|rs }}{% elif spec.type == 'bonus_points' %}: {{ spec.value|int }} points{% endif %}
+      · {{ applies[spec.applies_to] }}{% if spec.categories %} ({% for c in spec.categories %}{{ category_labels.get(c, c) }}{{ ', ' if not loop.last }}{% endfor %}){% endif %}
+      · {% if 'all' in spec.segments %}all customers{% else %}{% for g in spec.segments %}{{ segment_labels.get(g, g) }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+      · min order {{ spec.min_order_value|rs }} · valid {{ (spec.valid_hours / 24)|round(0)|int }} days · budget {{ spec.budget_rs|rs }}</p>
+  </div>
+  <div>
+    {% if deal.status == 'draft' %}<span class="badge">Draft</span>{% elif deal.status == 'sending' %}<span class="badge deferred">Sending…</span>
+    {% elif deal.status == 'done' %}<span class="badge sent">Sent {{ deal.finished_at|dt }}</span>{% else %}<span class="badge warn">Stopped</span>{% endif %}
+  </div>
+</div>
+
+{% if deal.status == 'draft' %}
+  <div class="grid g4">
+    <div class="card tile"><div class="label">Will get the deal</div><div class="value">{{ "{:,}".format(preview.to_send) }}</div>
+      <div class="note">of {{ "{:,}".format(preview.audience) }} customers in the chosen groups</div></div>
+    <div class="card tile"><div class="label">On Telegram</div><div class="value">{{ "{:,}".format(preview.on_telegram) }}</div>
+      <div class="note">{{ "{:,}".format(preview.coupons_only) }} more get a coupon code you can share (CSV)</div></div>
+    <div class="card tile"><div class="label">Most it can cost you</div><div class="value">{{ preview.liability|rs }}</div>
+      <div class="note">if every customer uses it · budget {{ spec.budget_rs|rs }}</div></div>
+    <div class="card tile"><div class="label">Control group</div><div class="value">{{ "{:,}".format(preview.holdout) }}</div>
+      <div class="note">similar customers held back on purpose, to measure what the deal adds</div></div>
+  </div>
+  {% if preview.send_after %}<div class="flash ok section">It's quiet hours now: Telegram messages will go out at {{ preview.send_after|dt }}. Coupons are saved straight away.</div>{% endif %}
+  <div class="grid g2 section">
+    <div class="card">
+      <h2>What customers will get</h2>
+      {% if preview.headlines %}
+      <table>{% for h, n in preview.headlines %}<tr><td>{{ h }}</td><td class="num">{{ "{:,}".format(n) }}</td></tr>{% endfor %}</table>
+      <h3 class="section">Examples</h3>
+      <table>{% for x in sample %}<tr><td><a href="/app/customers/{{ x.id }}">{{ x.name }}</a><div class="desc">{{ segment_labels.get(x.segment, x.segment) }}</div></td>
+        <td>{{ x.headline }}<div class="desc">{{ x.terms }}</div></td><td class="small">{{ '📱' if x.telegram else '✉' }}</td></tr>{% endfor %}</table>
+      {% else %}<p class="muted">Nobody would get this deal with the current settings and rules.</p>{% endif %}
+    </div>
+    <div class="card">
+      <h2>Who won't get it, and why</h2>
+      {% if preview.blocked or preview.budget_stopped %}
+      <table>
+        {% for reason, n in preview.blocked.items() %}<tr><td>{{ reason }}</td><td class="num">{{ "{:,}".format(n) }}</td></tr>{% endfor %}
+        {% if preview.budget_stopped %}<tr><td>Budget ran out (lower-value customers)</td><td class="num">{{ "{:,}".format(preview.budget_stopped) }}</td></tr>{% endif %}
+      </table>
+      <p class="desc">These are your rules at work: no spamming, no discounts above your limits, and no paying customers who'd buy anyway.</p>
+      {% else %}<p class="muted">Everyone in the chosen groups qualifies.</p>{% endif %}
+    </div>
+  </div>
+  <div class="section" style="display: flex; gap: 8px; flex-wrap: wrap">
+    <form method="post" action="/app/deals/{{ deal.id }}/launch" onsubmit="return confirm('Send this deal to {{ preview.to_send }} customers now?')">
+      <button type="submit" {{ 'disabled' if not preview.to_send }}>Launch deal</button></form>
+    <a class="btn" style="background: var(--surface-2); color: var(--ink)" href="/app/deals/{{ deal.id }}/edit">Edit</a>
+    <form method="post" action="/app/deals/{{ deal.id }}/delete" onsubmit="return confirm('Delete this draft?')"><button class="secondary" type="submit">Delete draft</button></form>
+  </div>
+
+{% else %}
+  {% if deal.status == 'sending' %}<div class="flash ok">Sending… {% if p.stage == 'delivering' %}{{ p.delivered or 0 }} of {{ p.on_telegram or 0 }} Telegram messages delivered.{% else %}working out each customer's offer.{% endif %} This page refreshes by itself.</div>{% endif %}
+  {% if deal.error %}<div class="flash err">{{ deal.error }}</div>{% endif %}
+  <div class="grid g4">
+    <div class="card tile"><div class="label">Sent</div><div class="value">{{ "{:,}".format(stats.sent + stats.queued) }}</div>
+      <div class="note">{{ p.get('delivered', 0) }} on Telegram{% if stats.queued %} · {{ stats.queued }} queued for the morning{% endif %} · {{ "{:,}".format(p.get('coupons_only', 0)) }} coupons to share</div></div>
+    <div class="card tile"><div class="label">Claimed on Telegram</div><div class="value">{{ stats.claimed }}</div>
+      <div class="note">{{ stats.dismissed }} said "not now"</div></div>
+    <div class="card tile"><div class="label">Most it can cost you</div><div class="value">{{ stats.liability|rs }}</div>
+      <div class="note">of the {{ deal.budget_rs|rs }} budget</div></div>
+    <div class="card tile"><div class="label">Control group</div><div class="value">{{ stats.holdout }}</div>
+      <div class="note">held back to measure the deal's effect</div></div>
+  </div>
+  {% if report and report.overall.treat.n %}{% set o = report.overall %}
+  <div class="card section">
+    <h2>Did it work?</h2>
+    <p>Customers who got the deal bought <b>{{ o.treat.conv|pct(1) }}</b> of the time, against <b>{{ o.hold.conv|pct(1) }}</b> in the control group:
+      {% if o.uplift >= 0 %}<b>+{{ (o.uplift * 100)|round(1) }} points</b>{% else %}<b>{{ (o.uplift * 100)|round(1) }} points</b>{% endif %}
+      {% if o.significant %}(a clear effect){% else %}(not yet a clear effect: the difference could be chance){% endif %}.
+      Extra profit after discounts: <b>{{ o.incremental_profit|rs }}</b> for {{ o.treat.discounts|rs }} of discounts used.</p>
+    {% if p.get('simulated') %}<p class="desc">Responses for demo-data customers are simulated; real Telegram claims are counted above.</p>{% endif %}
+  </div>
+  {% endif %}
+  {% if p.get('blocked') %}
+  <div class="card section">
+    <h2>Who didn't get it, and why</h2>
+    <table>{% for reason, n in p.blocked.items() %}<tr><td>{{ reason }}</td><td class="num">{{ "{:,}".format(n) }}</td></tr>{% endfor %}
+      {% if p.budget_stopped %}<tr><td>Budget ran out (lower-value customers)</td><td class="num">{{ "{:,}".format(p.budget_stopped) }}</td></tr>{% endif %}</table>
+  </div>
+  {% endif %}
+  {% if deal.status != 'sending' %}
+  <p class="section"><a class="btn" href="/app/deals/{{ deal.id }}/coupons.csv">Download coupons (CSV)</a>
+    <span class="small muted">for customers you'll reach by email, SMS or your app</span></p>
+  {% endif %}
+{% endif %}
+{% endblock %}

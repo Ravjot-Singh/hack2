@@ -90,7 +90,7 @@ class Report:
     live: dict
 
 
-def measure(conn: Connection, tenant_id: int, since: datetime | None = None) -> Report:
+def measure(conn: Connection, tenant_id: int, since: datetime | None = None, deal_id: int | None = None) -> Report:
     q = (select(OfferDecision.outcome, OfferDecision.shortlist, OfferDecision.segment, OfferDecision.expected_net_rs,
                 OfferOutcome.purchased, OfferOutcome.redeemed, OfferOutcome.order_value, OfferOutcome.margin_rs,
                 OfferOutcome.discount_cost)
@@ -98,6 +98,8 @@ def measure(conn: Connection, tenant_id: int, since: datetime | None = None) -> 
          .where(OfferDecision.tenant_id == tenant_id))
     if since:
         q = q.where(OfferDecision.created_at >= since)
+    if deal_id is not None:
+        q = q.where(OfferDecision.deal_id == deal_id)
     overall = Comparison("all offers")
     by_offer: dict[str, Comparison] = defaultdict(lambda: Comparison(""))
     by_seg: dict[str, Comparison] = defaultdict(lambda: Comparison(""))

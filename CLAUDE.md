@@ -34,6 +34,14 @@ every AI choice before anything is sent.
   guards, value floor and quiet hours still apply), and a custom-offer builder (`check_custom` builds a
   one-off `Offer` key `custom`, runs `check_rules` + `evaluate` on a rules copy; Send only after it passes).
   Delivery: Telegram push if linked, else coupon saved; quiet hours queue only Telegram messages.
+  Deals (`/app/deals`, engine `app/offers/deals.py`): draft form → preview (`plan_deal` dry run: who gets
+  what, Telegram vs coupon, control group, grouped "why not" reasons, worst-case cost) → launch (async
+  `start_deal` background task: `execute_deal` records decisions with `deal_id`/trigger `deal`, AI intros only
+  for Telegram users, simulated outcomes for demo-data customers, then pushes; progress JSON on the deal; stale
+  "sending" deals marked failed at startup) → deal page (stats, uplift vs control via `measure(deal_id=)`,
+  coupons CSV). Personalisation: favourite / whole store / chosen categories, % capped per category; frequency
+  limits and margin guards apply; the deal budget replaces the daily budget (best expected value first).
+  Activity page (`/app/activity`) shares `_feed.html` with Home.
 - `app/data/` — synthetic data: `calendar.py` (Indian sale/festival calendar), `generator.py` (hidden personas →
   daily demand → orders, carts, browsing, points), `loader.py` (replaces one tenant's rows, shifts ids),
   `summary.py` (realism report). `customers.true_segment` and `customers.price_sensitivity` are hidden generator
@@ -104,7 +112,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
 6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅
 Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers ✅
-P3 deals  P4 data upload  P5 settings  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
+P3 deals ✅  P4 data upload  P5 settings  P6 polish.  10. Deploy (Render) + README: LAST, only when the user says.
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order

@@ -50,6 +50,10 @@ def template_intro(c: Candidate, ctx: dict) -> str:
     return text.format_map(_Safe({k: escape(str(v)) for k, v in ctx.items() if v is not None}))
 
 
+def deal_intro(deal_name: str, first_name: str) -> str:
+    return f"🎉 <b>{escape(deal_name)}</b>\n{escape(first_name)}, here's your personal deal:"
+
+
 def offer_box(c: Candidate, coupon: str) -> str:
     return (f"🎁 <b>{escape(c.headline)}</b>\n"
             f"<i>{escape(c.terms)}</i>\n"

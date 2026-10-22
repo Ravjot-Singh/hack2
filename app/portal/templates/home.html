@@ -46,35 +46,28 @@
   </div>
 </div>
 
+<div class="grid g2 section">
+  <div class="card">
+    <div class="page-head" style="margin-bottom: 8px"><h2 style="margin: 0">Deals</h2><a class="btn" href="/app/deals/new">+ New deal</a></div>
+    {% if deals %}
+    <table>{% for d in deals %}<tr>
+      <td><a href="/app/deals/{{ d.id }}">{{ d.name }}</a></td>
+      <td>{% if d.status == 'draft' %}<span class="badge">Draft</span>{% elif d.status == 'sending' %}<span class="badge deferred">Sending…</span>{% elif d.status == 'done' %}<span class="badge sent">Sent to {{ d.progress.get('to_send', 0) }}</span>{% else %}<span class="badge warn">Stopped</span>{% endif %}</td>
+    </tr>{% endfor %}</table>
+    {% else %}<p class="small muted">Run a deal for many customers at once, e.g. a festive sale. Each customer gets a version that fits them.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Quick actions</h2>
+    <ul class="small" style="margin: 0; padding-left: 18px; line-height: 2">
+      <li><a href="/app/customers?sort=risk">Win back customers most likely to leave</a></li>
+      <li><a href="/app/customers?group=loyal_high_value">Thank your best customers</a></li>
+      <li><a href="/app/deals/new">Start a deal for everyone</a></li>
+    </ul>
+  </div>
+</div>
+
 <div class="card section">
-  <h2>Latest activity</h2>
-  {% if feed %}
-  <div class="table-wrap"><table>
-    <thead><tr><th>When</th><th>Customer</th><th>Why</th><th>Result</th><th>Offer</th><th>Details</th></tr></thead>
-    <tbody>
-    {% for r in feed %}{% set d = r.d %}
-    <tr>
-      <td class="num">{{ r.created_at|dt }}</td>
-      <td>{{ r.name }}<div class="desc">{{ r.ref }} · {{ segment_labels.get(d.segment, d.segment) }}</div></td>
-      <td>{{ TRIGGER_LABELS.get(d.trigger, d.trigger.replace('event:', '').replace('_', ' ')|capitalize) }}</td>
-      <td class="feed-result">
-        <span class="badge {{ d.outcome }}">{{ RESULT_LABELS.get(d.outcome, d.outcome) }}</span>
-        {% if d.response == 'claimed' %}<div><span class="badge claimed">Claimed</span></div>
-        {% elif d.response == 'dismissed' %}<div><span class="badge">Not now</span></div>{% endif %}
-      </td>
-      <td>{% if d.offer_key %}{{ offer_labels.get(d.offer_key, d.offer_key) }}<div class="desc">{{ d.headline or '' }}</div>{% else %}<span class="muted">–</span>{% endif %}</td>
-      <td class="small">
-        {% if d.outcome == 'sent' %}<span class="channel">{{ '📱 Sent on Telegram' if r.on_telegram else '✉ Not on Telegram: coupon saved' }}</span>
-          {% if d.coupon_code %}<div class="desc">Code {{ d.coupon_code }}</div>{% endif %}
-        {% elif d.outcome == 'holdout' %}Held back on purpose so you can measure what offers add.
-        {% else %}{{ d.block_reason or '' }}{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-  {% else %}
-  <p class="muted">Nothing yet. Offers your customers receive, and the ones the rules held back, will show up here.</p>
-  {% endif %}
+  <div class="page-head" style="margin-bottom: 8px"><h2 style="margin: 0">Latest activity</h2><a class="small" href="/app/activity">All activity →</a></div>
+  {% include "_feed.html" %}
 </div>
 {% endblock %}

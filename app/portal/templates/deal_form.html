@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit deal' if deal_id else 'New deal' }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><p class="small"><a href="/app/deals">← Deals</a></p>
+    <h1>{{ 'Edit deal' if deal_id else 'New deal' }}</h1>
+    <p>Describe the deal once. Each customer gets their own version, capped by your discount limits, and you'll see a preview before anything is sent.</p></div>
+</div>
+{% if errors %}<div class="flash err" role="alert"><b>Please fix these first</b><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+
+<form method="post" action="{{ '/app/deals/' ~ deal_id ~ '/edit' if deal_id else '/app/deals' }}">
+<div class="grid g2">
+  <div class="card">
+    <h2>The deal</h2>
+    <div class="grid g2" style="gap: 12px">
+      <label class="f" style="grid-column: 1 / -1">Deal name (customers see this)<input name="name" value="{{ form.name }}" maxlength="80" placeholder="e.g. Diwali Deal" required></label>
+      <label class="f">Type
+        <select name="type" id="dtype">{% for k, v in types.items() %}<option value="{{ k }}" {{ 'selected' if form.type == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="f" id="dvalue"><span id="dvalue-label">Up to (%)</span><input type="number" name="value" value="{{ form.value }}" min="0" step="1"></label>
+      <label class="f">Minimum order (₹)<input type="number" name="min_order_value" value="{{ form.min_order_value }}" min="0" step="1"></label>
+      <label class="f" id="dmax">Maximum discount per order (₹)<input type="number" name="max_discount_rs" value="{{ form.max_discount_rs or '' }}" min="1" max="{{ max_per_offer }}" step="1"></label>
+      <label class="f">Each customer's offer is valid for
+        <select name="valid_hours">{% for h, t in [(24, '1 day'), (72, '3 days'), (168, '1 week'), (336, '2 weeks')] %}<option value="{{ h }}" {{ 'selected' if form.valid_hours|int == h }}>{{ t }}</option>{% endfor %}</select></label>
+      <label class="f">Total budget (₹)<input type="number" name="budget_rs" value="{{ form.budget_rs }}" min="1" step="100">
+        <span class="desc">The most the deal may cost you if every customer uses it. Goes to the customers where it adds most.</span></label>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Applies to</h2>
+    {% for k, v in applies.items() %}
+    <label style="display: block; margin: 6px 0"><input type="radio" name="applies_to" value="{{ k }}" {{ 'checked' if form.applies_to == k }}> {{ v }}</label>
+    {% endfor %}
+    <div class="segs-checks section" id="dcats">
+      {% for k, v in category_labels.items() %}
+      <label title="Discount limit {{ caps.get(k, caps['any'])|int }}%"><input type="checkbox" name="categories" value="{{ k }}" {{ 'checked' if k in form.categories }}> {{ v }} <span class="muted">(max {{ caps.get(k, caps['any'])|int }}%)</span></label>
+      {% endfor %}
+    </div>
+    <p class="desc">With "favourite category", ticking categories limits the deal to customers whose favourite is one of them. Percentages above a category's limit are lowered to that limit for those customers.</p>
+    <h2 class="section">Customer groups</h2>
+    <div class="segs-checks">
+      <label><input type="checkbox" name="segments" value="all" {{ 'checked' if 'all' in form.segments }}> Everyone</label>
+      {% for s in segment_info.values() %}
+      <label title="{{ s.description }}"><input type="checkbox" name="segments" value="{{ s.key }}" {{ 'checked' if s.key in form.segments }}> {{ s.label }}</label>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<div class="section" style="display: flex; gap: 8px">
+  <button type="submit">{{ 'Save and preview' if deal_id else 'Create and preview' }}</button>
+  <a class="btn" style="background: var(--surface-2); color: var(--ink)" href="{{ '/app/deals/' ~ deal_id if deal_id else '/app/deals' }}">Cancel</a>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const t = document.getElementById("dtype");
+  const labels = {percent_off: "Up to (%)", flat_off: "Amount off (₹)", bonus_points: "Bonus points", free_delivery: ""};
+  const sync = () => {
+    document.getElementById("dvalue").style.display = t.value === "free_delivery" ? "none" : "";
+    document.getElementById("dvalue-label").textContent = labels[t.value];
+    document.getElementById("dmax").style.display = t.value === "percent_off" ? "" : "none";
+  };
+  t.addEventListener("change", sync); sync();
+</script>
+{% endblock %}

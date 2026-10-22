@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Deals{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Deals</h1><p>One offer idea for many customers. Each customer gets a version that fits them, within your rules.</p></div>
+  <a class="btn" href="/app/deals/new">+ New deal</a>
+</div>
+<div class="card">
+  {% if items %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Deal</th><th>Status</th><th class="num">Sent</th><th class="num">Claimed</th><th class="num">Budget</th><th>Created</th></tr></thead>
+    <tbody>
+    {% for it in items %}{% set d = it.d %}{% set p = d.progress or {} %}
+    <tr>
+      <td><a href="/app/deals/{{ d.id }}"><b>{{ d.name }}</b></a>
+        <div class="desc">{{ 'up to ' ~ (d.value|int) ~ '%' if d.type == 'percent_off' else ('₹' ~ (d.value|int) ~ ' off' if d.type == 'flat_off' else ((d.value|int) ~ ' bonus points' if d.type == 'bonus_points' else 'Free delivery')) }}</div></td>
+      <td>{% if d.status == 'draft' %}<span class="badge">Draft</span>{% elif d.status == 'sending' %}<span class="badge deferred">Sending…</span>
+          {% elif d.status == 'done' %}<span class="badge sent">Sent</span>{% else %}<span class="badge warn">Stopped</span>{% endif %}</td>
+      <td class="num">{{ p.get('to_send', '–') }}</td>
+      <td class="num">{{ it.claimed if d.status != 'draft' else '–' }}</td>
+      <td class="num">{{ d.budget_rs|rs }}</td>
+      <td class="num">{{ it.created_at|dt }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p>No deals yet. Create one, e.g. a festive sale for all customers, or a win-back deal for customers who are drifting away.</p>
+  <p><a class="btn" href="/app/deals/new">Create your first deal</a></p>
+  {% endif %}
+</div>
+{% endblock %}

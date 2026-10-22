@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from app.dashboard import queries
 from app.dashboard.routes import ASSET_VERSION, _dt, _pct, _rs
 from app.data.generator import IST
-from app.db.models import Customer, RulesVersion, TelegramUser
+from app.db.models import Customer, Deal, RulesVersion, TelegramUser
 from app.db.session import session_scope
 from app.portal import offers as portal_offers
 from app.portal import queries as pq
@@ -28,7 +28,7 @@ templates.env.globals.update(asset_version=ASSET_VERSION)
 # Plain-language names for decision results.
 RESULT_LABELS = {"sent": "Offer sent", "holdout": "Control group", "no_offer": "Not sent",
                  "deferred": "Queued for morning"}
-TRIGGER_LABELS = {"on_demand": "Customer asked", "campaign": "Campaign", "operator": "Sent by you",
+TRIGGER_LABELS = {"on_demand": "Customer asked", "campaign": "Campaign", "operator": "Sent by you", "deal": "Deal",
                   "event:cart_abandoned": "Left a cart", "event:points_expiring": "Points expiring",
                   "event:birthday": "Birthday"}
 templates.env.globals.update(RESULT_LABELS=RESULT_LABELS, TRIGGER_LABELS=TRIGGER_LABELS)
@@ -123,6 +123,9 @@ def home(request: Request, biz: Business = Depends(current_business), welcome: i
         feed = queries.decisions(s, biz.tenant_id, False, None, None, 12, 0)
         rules_edited = bool(s.scalar(select(func.count()).select_from(RulesVersion)
                                      .where(RulesVersion.tenant_id == biz.tenant_id)))
+        recent_deals = [{"id": d.id, "name": d.name, "status": d.status, "progress": d.progress or {}}
+                        for d in s.scalars(select(Deal).where(Deal.tenant_id == biz.tenant_id)
+                                           .order_by(Deal.id.desc()).limit(3))]
     checklist = [
         {"done": stats["customers"] > 0, "title": "Add your customer data",
          "text": "Upload your customers, products and orders as CSV files, or start with demo data."},
@@ -131,15 +134,19 @@ def home(request: Request, biz: Business = Depends(current_business), welcome: i
         {"done": rules_edited, "title": "Review your offer rules",
          "text": "Discount limits, budget and how often a customer may hear from you. Sensible defaults are set."},
     ]
-    return page(request, "home.html", biz, "home", stats=stats, feed=feed, checklist=checklist,
+    return page(request, "home.html", biz, "home", stats=stats, feed=feed, checklist=checklist, deals=recent_deals,
                 setup_done=all(c["done"] for c in checklist), welcome=welcome, **_labels(biz))
 
 
 def _labels(biz: Business) -> dict:
     p = biz.policy
+    with session_scope() as s:
+        deal_names = {f"deal_{i}": n for i, n in s.execute(select(Deal.id, Deal.name)
+                                                           .where(Deal.tenant_id == biz.tenant_id))}
     return {"segment_labels": {x.key: x.label for x in p.segments.segments},
             "segment_info": {x.key: x for x in p.segments.segments},
-            "offer_labels": {**{o.key: o.label for o in p.rules.offers}, portal_offers.CUSTOM_KEY: "Custom offer"},
+            "offer_labels": {**{o.key: o.label for o in p.rules.offers}, portal_offers.CUSTOM_KEY: "Custom offer",
+                             **deal_names},
             "category_labels": p.catalog.labels}
 
 

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Activity{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Activity</h1><p>Every offer decision for your real customers: what was sent, and what your rules held back and why.</p></div>
+</div>
+<div class="pill-list" style="margin-bottom: 12px">
+  <a class="badge {{ 'sent' if not result }}" href="{{ qs(result='', page_no=1) }}">All</a>
+  {% for k, v in RESULT_LABELS.items() %}<a class="badge {{ 'sent' if result == k }}" href="{{ qs(result=k, page_no=1) }}">{{ v }}</a>{% endfor %}
+</div>
+<div class="card">
+  {% include "_feed.html" %}
+  <p class="small">
+    {% if page_no > 1 %}<a href="{{ qs(page_no=page_no - 1) }}">← Newer</a> · {% endif %}Page {{ page_no }}
+    {% if more %} · <a href="{{ qs(page_no=page_no + 1) }}">Older →</a>{% endif %}
+  </p>
+</div>
+{% endblock %}

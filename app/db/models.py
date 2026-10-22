@@ -202,6 +202,32 @@ class TelegramUser(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Deal(Base):
+    """A deal for many customers (e.g. "Diwali Deal: up to 15% off"), personalised per customer by the engine."""
+
+    __tablename__ = "deals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(12), default="draft")  # draft | sending | done | failed
+    type: Mapped[str] = mapped_column(String(20))  # percent_off | flat_off | free_delivery | bonus_points
+    value: Mapped[float] = mapped_column(Float)  # "up to" % / Rs off / points
+    applies_to: Mapped[str] = mapped_column(String(12))  # favourite | any | categories
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    segments: Mapped[list] = mapped_column(JSON, default=list)  # ["all"] or group keys
+    min_order_value: Mapped[int] = mapped_column(Integer, default=0)
+    max_discount_rs: Mapped[int | None] = mapped_column(Integer)
+    valid_hours: Mapped[int] = mapped_column(Integer, default=72)
+    budget_rs: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(160))
+    launched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)  # counts while/after sending
+    error: Mapped[str | None] = mapped_column(String(300))
+
+
 class OfferDecision(Base):
     """Every decision the engine makes for a customer, including 'no offer', and what happened next."""
 
@@ -215,6 +241,7 @@ class OfferDecision(Base):
     trigger: Mapped[str] = mapped_column(String(30))  # on_demand | event:<kind> | campaign
     # Simulated decisions (campaign simulations over synthetic customers) never count toward live limits/budget.
     simulated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    deal_id: Mapped[int | None] = mapped_column(ForeignKey("deals.id"), index=True)
     segment: Mapped[str] = mapped_column(String(30))
     outcome: Mapped[str] = mapped_column(String(12))  # sent | no_offer | holdout | deferred
     block_reason: Mapped[str | None] = mapped_column(String(300))

@@ -14,6 +14,8 @@
     <div class="biz"><b>{{ biz.tenant.name }}</b><span>Offer Engine</span></div>
     <a class="nav {{ 'on' if nav == 'home' }}" href="/app"><span class="nav-ico">⌂</span>Home</a>
     <a class="nav {{ 'on' if nav == 'customers' }}" href="/app/customers"><span class="nav-ico">☺</span>Customers</a>
+    <a class="nav {{ 'on' if nav == 'deals' }}" href="/app/deals"><span class="nav-ico">✦</span>Deals</a>
+    <a class="nav {{ 'on' if nav == 'activity' }}" href="/app/activity"><span class="nav-ico">≡</span>Activity</a>
     <div class="foot">
       {{ biz.email }}
       <form method="post" action="/app/logout"><button class="secondary" type="submit">Log out</button></form>

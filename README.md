@@ -176,6 +176,13 @@ being built in phases. Available now:
   you get a coupon code to share. Offers you send by hand skip only the "how often" limits (gap between offers,
   weekly cap, no-repeat window), with a heads-up if the customer heard from you recently; every discount, budget
   and margin rule still applies, and so does a customer's opt-out.
+- **Deals**: describe a deal once (e.g. "Diwali Deal: up to 15% off", for everyone or chosen customer groups,
+  on each customer's favourite category, the whole store, or chosen categories, with a total budget). The
+  preview shows who would get what (percentages are lowered to each category's discount limit), how many are on
+  Telegram, the control group, why others are left out, and the most it can cost. Launch sends it in the
+  background; the deal page shows progress, claims, the result against the control group, and a CSV of coupons
+  for customers you'll reach through your own channels.
+- **Activity**: every decision, filterable by result.
 
 To give the ShopKart demo store a login (you'll be asked for a password):
 

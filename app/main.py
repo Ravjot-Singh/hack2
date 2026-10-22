@@ -16,9 +16,11 @@ from telegram import Update
 from app.bot.runner import build_bots, start_bots, stop_bots
 from app.config import get_settings
 from app.dashboard.routes import STATIC_DIR, router as dashboard_router
+from app.portal.deals_routes import router as portal_deals_router
 from app.portal.routes import router as portal_router
 from starlette.middleware.sessions import SessionMiddleware
 from app.db.session import get_engine, session_scope
+from app.offers.deals import mark_interrupted_deals
 from app.tenants.registry import get_tenants, sync_tenants
 
 log = logging.getLogger(__name__)
@@ -31,6 +33,7 @@ async def lifespan(app: FastAPI):
     try:
         with session_scope() as s:
             sync_tenants(s, get_tenants())
+        mark_interrupted_deals()
     except Exception as exc:  # app should still boot so /health can report the problem
         log.warning("Could not sync tenants to database: %s", exc)
     if settings.public_base_url:
@@ -47,6 +50,7 @@ app.add_middleware(SessionMiddleware, secret_key=_settings.session_secret, sessi
 app.mount("/admin/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(dashboard_router)
 app.include_router(portal_router)
+app.include_router(portal_deals_router)
 
 
 @app.get("/", include_in_schema=False)

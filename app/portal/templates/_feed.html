@@ -1,0 +1,29 @@
+{% if feed %}
+<div class="table-wrap"><table>
+  <thead><tr><th>When</th><th>Customer</th><th>Why</th><th>Result</th><th>Offer</th><th>Details</th></tr></thead>
+  <tbody>
+  {% for r in feed %}{% set d = r.d %}
+  <tr>
+    <td class="num">{{ r.created_at|dt }}</td>
+    <td><a href="/app/customers/{{ d.customer_id }}">{{ r.name }}</a><div class="desc">{{ r.ref }} · {{ segment_labels.get(d.segment, d.segment) }}</div></td>
+    <td>{{ TRIGGER_LABELS.get(d.trigger, d.trigger.replace('event:', '').replace('_', ' ')|capitalize) }}</td>
+    <td class="feed-result">
+      <span class="badge {{ d.outcome }}">{{ RESULT_LABELS.get(d.outcome, d.outcome) }}</span>
+      {% if d.response == 'claimed' %}<div><span class="badge claimed">Claimed</span></div>
+      {% elif d.response == 'dismissed' %}<div><span class="badge">Not now</span></div>{% endif %}
+    </td>
+    <td>{% if d.offer_key %}{{ offer_labels.get(d.offer_key, d.offer_key) }}<div class="desc">{{ d.headline or '' }}</div>{% else %}<span class="muted">–</span>{% endif %}</td>
+    <td class="small">
+      {% if d.outcome == 'sent' %}<span class="channel">{{ '📱 Sent on Telegram' if r.on_telegram else '✉ Not on Telegram: coupon saved' }}</span>
+        {% if d.coupon_code %}<div class="desc">Code {{ d.coupon_code }}</div>{% endif %}
+      {% elif d.outcome == 'deferred' %}<span class="channel">◷ Goes out on Telegram {{ d.send_after|dt }} (quiet hours)</span>
+      {% elif d.outcome == 'holdout' %}Held back on purpose so you can measure what offers add.
+      {% else %}{{ d.block_reason or '' }}{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">Nothing yet. Offers your customers receive, and the ones the rules held back, will show up here.</p>
+{% endif %}
