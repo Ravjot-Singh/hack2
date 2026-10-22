@@ -45,7 +45,14 @@ every AI choice before anything is sent.
 - `app/bot/` — `handlers.py` (/start persona picker, /offers, /profile, /switch, /stop, /resume, /help, Claim /
   Not now / Stop buttons), `runner.py` (one Application per tenant with a token; webhook when PUBLIC_BASE_URL is
   set, else polling). `POST /tg/{slug}/{secret}` checks path secret + Telegram secret header.
-- Decision pipeline (later stages): features → rules engine shortlist → holdout → Groq chooser → validator → deliver → log.
+- `app/agent/` — `groq_client.py` (`groq_json`: only calls Groq when LLM_ENABLED + key + per-minute and per-day
+  caps allow; daily count comes from the `llm_calls` table; any failure → None), `chooser.py` (prompt with
+  customer facts as JSON data + top-4 shortlist; model returns offer_key/title/body/reason; per-day cache;
+  falls back to the rules' top pick + template and records why), `validator.py` (offer_key must be in the
+  shortlist; intro may not contain numbers, money, %, number words, timing claims, extra promises, links, HTML,
+  injection echoes, type-mismatched "free"/"points", or other categories). Default model `openai/gpt-oss-120b`
+  (reasoning_effort low). Try one customer: `python scripts/try_agent.py --tenant shopkart --customer 17 [--llm]`.
+- Decision pipeline: features → rules engine shortlist → (holdout, Stage 7) → AI chooser → validator → deliver → log.
 
 ## Commands
 ```
@@ -58,7 +65,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 
 ## Build stages
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
-6. Agent + validator  7. Triggers & measurement  8. Offer tuning  9. Dashboard  10. Deploy (Render) + README
+6. Agent + validator ✅  7. Triggers & measurement  8. Offer tuning  9. Dashboard  10. Deploy (Render) + README
 
 ### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
 - Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order

@@ -11,6 +11,8 @@ def sqlite_db(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("PUBLIC_BASE_URL", "")  # never start real bots / register webhooks in tests
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("LLM_ENABLED", "false")  # tests never call Groq, whatever .env says
+    monkeypatch.setenv("GROQ_API_KEY", "")
     for cached in (get_settings, get_engine, _session_factory):
         cached.cache_clear()
     Base.metadata.create_all(get_engine())

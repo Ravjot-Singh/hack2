@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     admin_password: str = "change-me"
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     llm_enabled: bool = False
     llm_max_calls_per_minute: int = 20
     llm_max_calls_per_day: int = 500

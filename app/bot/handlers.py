@@ -119,7 +119,7 @@ async def offers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await update.effective_chat.send_action("typing")
     result = await asyncio.to_thread(service.request_offer, bc.tenant_id, user["customer_id"], bc.policy,
-                                     bc.tenant.name, bc.coupon_prefix, "on_demand", _now())
+                                     bc.tenant.name, bc.coupon_prefix, "on_demand", _now(), bc.tenant.brand_voice)
     if result.kind in ("offer", "repeat"):
         if result.kind == "repeat":
             await update.effective_chat.send_message("Your current offer is still live 👇")

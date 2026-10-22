@@ -192,6 +192,7 @@ class OfferDecision(Base):
     offer_key: Mapped[str | None] = mapped_column(String(40))
     chosen_by: Mapped[str | None] = mapped_column(String(10))  # rules | ai
     ai_rejected_reason: Mapped[str | None] = mapped_column(String(300))
+    ai_reason: Mapped[str | None] = mapped_column(String(300))  # the AI's one-line rationale, for marketing
     headline: Mapped[str | None] = mapped_column(String(120))
     terms: Mapped[str | None] = mapped_column(String(300))
     message: Mapped[str | None] = mapped_column(Text)
@@ -209,6 +210,22 @@ class OfferDecision(Base):
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
     response: Mapped[str | None] = mapped_column(String(12))  # claimed | dismissed
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LLMCall(Base):
+    """One call to the LLM (Groq). Used for the daily cap and the dashboard."""
+
+    __tablename__ = "llm_calls"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    purpose: Mapped[str] = mapped_column(String(30))
+    ok: Mapped[bool] = mapped_column(Boolean)
+    latency_ms: Mapped[int] = mapped_column(Integer)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(String(300))
 
 
 class PointsLedger(Base):

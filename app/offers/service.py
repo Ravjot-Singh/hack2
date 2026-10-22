@@ -14,9 +14,11 @@ from datetime import datetime, time, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.agent.chooser import choose
+from app.agent.groq_client import JsonLLM, groq_json
 from app.db.models import Customer, CustomerFeature, OfferDecision, TelegramUser
 from app.db.session import session_scope
-from app.delivery.templates import offer_message, rs, template_intro
+from app.delivery.templates import offer_message, rs
 from app.features.customer import _aware
 from app.features.store import refresh_features
 from app.rules.engine import Candidate, CustomerContext, SentOffer, evaluate
@@ -135,7 +137,9 @@ def intro_context(cust_name: str, store: str, c: Candidate, f: dict, policy: Ten
 
 
 def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store: str, coupon_prefix: str,
-                  trigger: str, now: datetime) -> OfferResult:
+                  trigger: str, now: datetime, voice: str = "friendly", llm: JsonLLM | None = groq_json
+                  ) -> OfferResult:
+    """llm=None forces the rules + template path (used by simulations so Groq is never called)."""
     lim = policy.rules.limits
     with session_scope() as s:
         if trigger == "on_demand":  # re-show a live offer instead of making a new one
@@ -155,8 +159,8 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
         rec = OfferDecision(tenant_id=tenant_id, customer_id=customer_id, created_at=now, trigger=trigger,
                             segment=f["segment"], outcome="no_offer", liability_rs=0,
                             shortlist=[c.offer_key for c in decision.eligible])
-        s.add(rec)
         if decision.customer_block or not decision.eligible:
+            s.add(rec)
             rec.block_reason = (decision.customer_block or "No offer passed the rules: "
                                 + "; ".join(f"{b.label}: {b.reason}" for b in decision.blocked))[:300]
             s.flush()
@@ -166,16 +170,21 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
                 return OfferResult("too_soon", rec.id, next_time=_next_allowed(recent, policy, now))
             return OfferResult("none", rec.id)
 
-        c = decision.best
+        # AI picks from the rule-approved shortlist and writes the intro; the validator re-checks it, and the
+        # rules' own top pick + template is used if the AI is off, over budget, failing or rejected.
         cust_name = s.get(Customer, customer_id).name
-        intro = template_intro(c, intro_context(cust_name, store, c, f, policy))
+        ictx = intro_context(cust_name, store, decision.best, f, policy)
+        choice = choose(policy, tenant_id, customer_id, store, voice, cust_name, f, decision.eligible, ictx, now, llm)
+        c, intro = choice.candidate, choice.intro_html
+        s.add(rec)
+        rec.ai_rejected_reason, rec.ai_reason = choice.ai_rejected_reason, choice.ai_reason
         coupon = new_coupon(coupon_prefix)
         # A customer asking for an offer is not an interruption, so quiet hours don't apply on demand.
         deferred = decision.send_after is not None and trigger != "on_demand"
         valid_until = c.valid_until if deferred else now + (c.valid_until - (decision.send_after or now))
         rec.outcome = "deferred" if deferred else "sent"
         rec.send_after = decision.send_after if deferred else None
-        rec.offer_key, rec.chosen_by = c.offer_key, "rules"
+        rec.offer_key, rec.chosen_by = c.offer_key, choice.chosen_by
         rec.headline, rec.terms = c.headline, c.terms
         rec.coupon_code = coupon
         rec.category, rec.percent, rec.amount_rs, rec.points = c.category, c.percent, c.amount_rs, c.points

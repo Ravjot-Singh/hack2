@@ -9,7 +9,7 @@ Built for the J-PAL South Asia Punjab Jobs AI Bootcamp, Hackathon 2.
 - **Synthetic data only**: realistic customers, orders, browsing, carts and reward points are generated locally.
 - **Multi-tenant**: each store gets its own bot, rules and catalog under `tenants/<slug>/`.
 
-> Status: Stage 5 (Telegram bot). Sections below grow as stages land.
+> Status: Stage 6 (AI agent + validator). Sections below grow as stages land.
 
 ## Setup
 
@@ -109,6 +109,29 @@ of that type → **Get my offer** → **Claim** or **Not now**. Other commands: 
   week), and `/stop` is respected immediately.
 - The offer box (discount, terms, coupon) is always generated from the rule-checked offer. Only the friendly
   intro above it will later be written by the AI.
+
+## AI agent and validator
+
+When the LLM is on, Groq (`openai/gpt-oss-120b`) gets the customer's facts and **only the offers that already
+passed the rules**. It picks one and writes a short intro, plus a one-line reason for the marketing team.
+Then the validator checks the answer before anything is sent:
+
+- the chosen offer must be on the rule-approved shortlist;
+- the intro may not state numbers, amounts, percentages or deadlines (those come only from the offer box,
+  which is built from the rules), promise extras, include links or HTML, or mention other categories;
+- customer data is passed as JSON data, never as instructions, and a model that "obeys" injected text is
+  caught by the same checks.
+
+If the LLM is off, over its limits, fails, or its answer is rejected, the rules' own top offer and a hand-written
+template are used, and the reason is recorded on the decision.
+
+**Staying inside the free tier:** `LLM_ENABLED=false` by default; per-minute and per-day caps
+(`LLM_MAX_CALLS_PER_MINUTE`, `LLM_MAX_CALLS_PER_DAY`), with the daily count stored in the database; answers
+cached per customer per day; tests and simulations never call Groq.
+
+```bash
+python scripts/try_agent.py --tenant shopkart --customer 17 --llm   # one real call, prints the message
+```
 
 ## Tests
 ```bash
