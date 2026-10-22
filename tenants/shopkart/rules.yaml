@@ -1,0 +1,165 @@
+# ShopKart offer rules.
+#
+# Two parts:
+#   limits  - hard limits no offer can break. The AI can only choose among offers that pass ALL of them,
+#             and its choice is checked against them again before anything is sent.
+#   offers  - the offers we are willing to make, and who may get each one.
+#
+# Money is in rupees. Percentages are written as plain numbers (10 = 10%), except the 0-1 "probability" limits.
+
+limits:
+  # Highest % discount allowed per category. Must stay below that category's margin (see catalog.yaml).
+  # "any" is the cap for store-wide offers; categories with a lower cap are excluded from such offers.
+  max_discount_pct:
+    electronics: 5      # margin 8%
+    grocery: 6          # margin 14%
+    books: 10           # margin 20%
+    home_kitchen: 20    # margin 32%
+    beauty: 25          # margin 40%
+    fashion: 30         # margin 45%
+    any: 10
+
+  max_discount_rs_per_offer: 500       # no single offer can be worth more than this
+  max_offers_per_customer_per_week: 2  # avoid offer fatigue
+  min_hours_between_offers: 48         # at least 2 days between any two offers to one person
+  same_offer_cooldown_days: 14         # the same offer is not repeated within 2 weeks
+  daily_budget_rs: 25000               # total worst-case cost of offers sent per day (if every one is used)
+
+  # Don't pay people to do what they'd do anyway: no money-off offers when the chance they buy
+  # in the next 14 days anyway is above this (0.5 = 50%). Bonus points are still allowed.
+  max_buy_anyway_prob_for_discounts: 0.5
+  # No money-off offers for customers who return more than this share of items (0.4 = 40%).
+  max_return_rate_for_discounts: 0.4
+  # Expected profit of an offer (extra margin it brings minus discounts paid) must be at least this.
+  # Slightly negative allows small investments in winning customers back.
+  min_expected_net_rs: -20
+
+  quiet_hours:            # never message people at night; offers wait until the end of quiet hours
+    start: "21:00"
+    end: "09:00"
+  delivery_fee_rs: 40     # what free delivery costs us
+  point_value_rs: 1       # 1 point = Rs 1
+
+measurement:
+  holdout_pct: 10         # this % of customers never get offers, so we can measure what offers really add
+
+# Offer fields:
+#   type             percent_off | flat_off | free_delivery | bonus_points
+#   value            10 = 10% (percent_off), Rs (flat_off), points (bonus_points); ignored for free_delivery
+#   category         any | from_cart (category of their abandoned cart) | top_category (their favourite)
+#                    | a catalog category such as fashion
+#   fallback_category  used when from_cart/top_category is unknown (e.g. any); otherwise the offer is skipped
+#   segments         which customer groups may get it (see segments.yaml), or [all]
+#   audience         extra conditions, same style as segments.yaml (e.g. abandoned_carts_7d_min: 1)
+#   priority         1-10; when several offers fit, higher priority is preferred
+#   expected_response  our guess of how many people use it (0.2 = 20%); used to estimate value
+
+offers:
+  - key: cart_recovery
+    label: Cart comeback
+    description: A nudge to finish a cart they left behind in the last week.
+    type: percent_off
+    value: 10
+    category: from_cart
+    min_order_value: 499
+    max_discount_rs: 300
+    valid_hours: 48
+    segments: [all]
+    audience:
+      abandoned_carts_7d_min: 1
+    priority: 9
+    expected_response: 0.25
+
+  - key: win_back
+    label: We miss you
+    description: Win back customers who are drifting away, on the category they used to love.
+    type: percent_off
+    value: 15
+    category: top_category
+    fallback_category: any   # if we don't know their favourite, make it store-wide (capped at 10%)
+    min_order_value: 699
+    max_discount_rs: 400
+    valid_hours: 168
+    segments: [at_risk, dormant]
+    priority: 8
+    expected_response: 0.08
+
+  - key: birthday
+    label: Birthday treat
+    description: A small gift in their birthday week.
+    type: percent_off
+    value: 10
+    category: any
+    min_order_value: 499
+    max_discount_rs: 250
+    valid_hours: 168
+    segments: [all]
+    audience:
+      days_to_birthday_max: 7
+    priority: 8
+    expected_response: 0.2
+
+  - key: second_order
+    label: Welcome back
+    description: Turn a new customer's first order into a habit.
+    type: flat_off
+    value: 100
+    category: any
+    min_order_value: 1099
+    valid_hours: 168
+    segments: [new]
+    audience:
+      orders_365_max: 1
+    priority: 7
+    expected_response: 0.2
+
+  - key: points_expiry
+    label: Points expiring
+    description: Remind them their points are about to expire, with a few bonus points if they order.
+    type: bonus_points
+    value: 50
+    category: any
+    min_order_value: 299
+    valid_hours: 168
+    segments: [all]
+    audience:
+      points_expiring_30d_min: 20
+    priority: 7
+    expected_response: 0.2
+
+  - key: deal_flash
+    label: Deal of the day
+    description: A short, sharp deal for people who love deals, on their favourite category.
+    type: percent_off
+    value: 12
+    category: top_category
+    min_order_value: 499
+    max_discount_rs: 200
+    valid_hours: 24
+    segments: [bargain_hunter]
+    priority: 6
+    expected_response: 0.3
+
+  - key: loyalty_bonus
+    label: Loyalty bonus
+    description: Thank our best customers with points instead of discounts (protects margin).
+    type: bonus_points
+    value: 100
+    category: any
+    min_order_value: 999
+    valid_hours: 168
+    segments: [loyal_high_value, regular]
+    priority: 5
+    expected_response: 0.25
+
+  - key: free_delivery
+    label: Free delivery
+    description: Remove the last bit of friction for browsers and occasional buyers.
+    type: free_delivery
+    value: 0
+    category: any
+    min_order_value: 299
+    valid_hours: 72
+    segments: [window_shopper, occasional, new]
+    priority: 5
+    expected_response: 0.12

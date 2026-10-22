@@ -29,6 +29,14 @@ every AI choice before anything is sent.
   segments from `tenants/<slug>/segments.yaml` (first match wins, plain-language reason); `store.py` saves the
   `customer_features` snapshot. Rebuild with `python scripts/build_features.py --tenant shopkart` (~10 s);
   it also prints agreement with the hidden personas (~50%: early churn is genuinely invisible in behaviour).
+- `app/features/conditions.py` — the single `<measure>_min/_max` condition grammar shared by segments.yaml and
+  rules.yaml audiences.
+- `app/rules/` — `schema.py` (rules.yaml model + `check_rules`: load-time business checks such as discount cap <=
+  category margin, flat-off % <= cap, known segments/categories), `engine.py` (pure `evaluate()` → Decision with a
+  ranked shortlist of Candidates and a plain-language reason for every blocked offer), `policy.py`
+  (`load_policy(tenant_dir)` bundles rules + catalog margins + segments). Preview with
+  `python scripts/preview_offers.py --tenant shopkart [--customer 17] [--at "2026-10-22 23:00"]`.
+  Budget counts worst-case liability of offers sent today. Quiet hours set `send_after`, never block.
 - Decision pipeline (later stages): features → rules engine shortlist → holdout → Groq chooser → validator → deliver → log.
 
 ## Commands
@@ -40,7 +48,7 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 ```
 
 ## Build stages
-1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine  5. Telegram bot
+1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot
 6. Agent + validator  7. Triggers & measurement  8. Dashboard  9. Deploy (Render) + README
 
 ## Conventions

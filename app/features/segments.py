@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, field_validator, model_validator
 
-from app.features.customer import FEATURE_LABELS
+from app.features.conditions import check_conditions, validate_conditions
 
 
 class SegmentRule(BaseModel):
@@ -16,17 +16,7 @@ class SegmentRule(BaseModel):
     description: str
     when: dict[str, float] = {}
 
-    @field_validator("when")
-    @classmethod
-    def known_measures(cls, when: dict[str, float]) -> dict[str, float]:
-        for cond in when:
-            measure, _, bound = cond.rpartition("_")
-            if bound not in ("min", "max") or measure not in FEATURE_LABELS:
-                raise ValueError(
-                    f"'{cond}' is not a valid condition. Use a measure name plus _min or _max, "
-                    f"e.g. orders_365_min. Measures: {', '.join(FEATURE_LABELS)}"
-                )
-        return when
+    _check_when = field_validator("when")(validate_conditions)
 
 
 class SegmentConfig(BaseModel):
@@ -49,28 +39,11 @@ def load_segment_config(path: Path) -> SegmentConfig:
     return SegmentConfig(**yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
-def _fmt(measure: str, v: float) -> str:
-    if measure in ("discount_share", "return_rate", "churn_risk", "buy_anyway_prob", "deal_affinity"):
-        return f"{v:.0%}"
-    return f"{v:,.0f}"
-
-
 def assign_segment(features: dict, cfg: SegmentConfig) -> tuple[str, str]:
     """Return (segment key, plain-language reason)."""
     for rule in cfg.segments:
-        reasons = []
-        for cond, threshold in rule.when.items():
-            measure, _, bound = cond.rpartition("_")
-            value = features.get(measure)
-            if value is None:  # only recency: never ordered = infinitely long ago
-                value = float("inf")
-            ok = value >= threshold if bound == "min" else value <= threshold
-            if not ok:
-                break
-            shown = "never" if value == float("inf") else _fmt(measure, value)
-            sign = ">=" if bound == "min" else "<="
-            reasons.append(f"{FEATURE_LABELS[measure]}: {shown} ({sign} {_fmt(measure, threshold)})")
-        else:
+        ok, reasons = check_conditions(features, rule.when)
+        if ok:
             reason = "; ".join(reasons) if reasons else "did not match any other group"
             return rule.key, reason[:200]
     raise AssertionError("unreachable: last segment is a catch-all")

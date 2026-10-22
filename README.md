@@ -9,7 +9,7 @@ Built for the J-PAL South Asia Punjab Jobs AI Bootcamp, Hackathon 2.
 - **Synthetic data only**: realistic customers, orders, browsing, carts and reward points are generated locally.
 - **Multi-tenant**: each store gets its own bot, rules and catalog under `tenants/<slug>/`.
 
-> Status: Stage 3 (features & segments). Sections below grow as stages land.
+> Status: Stage 4 (rules engine). Sections below grow as stages land.
 
 ## Setup
 
@@ -69,6 +69,30 @@ For every customer the engine works out, from behaviour only:
 Customers are then grouped using `tenants/shopkart/segments.yaml`, a plain-language file the marketing team can
 edit: groups are checked top to bottom, each with simple conditions such as `orders_365_min: 4`. Every customer
 gets a reason, for example *"days since last order: 163 (>= 120); churn risk: 91% (>= 60%)"*.
+
+## Offer rules
+
+All offers and limits live in `tenants/shopkart/rules.yaml`, written for a marketing team (every setting is
+commented). It has two parts:
+
+- **Limits** no offer can break: discount cap per category (kept below that category's margin), max Rs per offer,
+  max 2 offers per customer per week, 48h between offers, no repeat of the same offer within 14 days,
+  a daily budget, quiet hours (21:00–09:00), and two margin guards: no money-off offers to people who would
+  likely buy anyway, or to serial returners.
+- **Offers**: cart comeback, win-back, birthday treat, second-order welcome, points-expiry nudge, deal of the
+  day, loyalty bonus points and free delivery, each with who may get it and a priority.
+
+The file is checked when loaded, so a mistake such as a 12% cap on 8%-margin electronics, or Rs 100 off a
+Rs 999 order under a 10% cap, is rejected with a readable message instead of reaching customers.
+
+For each customer the engine returns a ranked shortlist with the reasons each offer qualifies, and a reason for
+every offer it blocked. It also estimates each offer's expected profit: the extra margin it brings in, minus the
+discount paid to everyone who uses it, including people who would have bought anyway.
+
+```bash
+python scripts/preview_offers.py --tenant shopkart                 # what every segment would get
+python scripts/preview_offers.py --tenant shopkart --customer 17    # one customer, every decision explained
+```
 
 ## Tests
 ```bash
