@@ -188,3 +188,60 @@ details summary { cursor: pointer; color: var(--accent); }
 .desc { color: var(--muted); font-size: 12px; }
 
 .invite-link { word-break: break-all; user-select: all; }
+
+/* ---- responsive: phones, tablets, big screens ---- */
+img, svg, canvas, video { max-width: 100%; }
+.card { overflow-x: auto; }  /* a wide table or chart scrolls inside its card, never the whole page */
+pre, code, .offer-msg { overflow-wrap: anywhere; }
+
+@media (max-width: 800px) {
+  /* Admin console header: tabs scroll sideways under the brand, search goes full width. */
+  .top-inner { gap: 8px 12px; }
+  nav.tabs { flex-wrap: nowrap; overflow-x: auto; width: 100%; order: 3; -webkit-overflow-scrolling: touch; }
+  nav.tabs a { flex: none; padding: 8px 10px; }
+  .top-right { margin-left: auto; }
+  main { padding: 16px 12px 48px; }
+  .hbar-row { grid-template-columns: 96px 1fr 48px; gap: 8px; }
+  .chart-box { height: 220px; }
+}
+
+@media (max-width: 640px) {
+  /* 16px stops phones zooming into a field when it's tapped. */
+  input, select, textarea, button { font-size: 16px; }
+  input[type=number] { width: 96px; }
+  label.f input:not([type=checkbox]):not([type=radio]), label.f select, label.f textarea { width: 100%; }
+  form.inline { align-items: stretch; }
+  form.inline > label.f { flex: 1 1 140px; }
+  h1 { font-size: 20px; }
+  .tile .value { font-size: 22px; }
+  .kv { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .segs-checks { min-width: 0; }
+
+  /* Data tables (3+ columns with a header row; marked by responsive.js) become one card per row:
+     the first cell is the title, every other cell shows its column name. */
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr.stack-head { display: none; }
+  table.stack tr { padding: 10px 0; border-bottom: 1px solid var(--grid); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td {
+    display: grid; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: 8px; align-items: baseline;
+    padding: 3px 0; border: 0; text-align: left; white-space: normal;
+  }
+  table.stack td::before { content: attr(data-label); color: var(--muted); font-size: 12px; }
+  table.stack td.num { text-align: left; }
+  table.stack td:first-child { grid-template-columns: minmax(0, 1fr); font-weight: 600; padding-bottom: 4px; }
+  table.stack td:first-child::before, table.stack td[data-label=""]::before { display: none; }
+  table.stack td[data-label=""] { grid-template-columns: minmax(0, 1fr); }
+  table.stack td:empty { display: none; }
+  table.stack td.cell-block { display: block; padding: 6px 0; }
+  table.stack td.cell-block::before { display: block; margin-bottom: 4px; }
+  table.stack td.cell-block:first-child::before, table.stack td.cell-block[data-label=""]::before { display: none; }
+  table.stack textarea, table.stack input:not([type=checkbox]):not([type=radio]):not([type=number]),
+  table.stack select { width: 100%; max-width: 100%; }
+  table.stack td > * + * { margin-top: 4px; }
+  tbody tr:hover { background: transparent; }
+}
+
+@media (min-width: 1600px) {
+  main, .top-inner { max-width: 1400px; }
+}

@@ -12,6 +12,8 @@
 <div class="shell">
   <aside class="side">
     <div class="biz"><b>{{ biz.tenant.name }}</b><span>Offer Engine</span></div>
+    <button type="button" class="menu-btn secondary" aria-expanded="false" aria-controls="side-nav">☰ Menu</button>
+    <nav class="nav-links" id="side-nav">
     <a class="nav {{ 'on' if nav == 'home' }}" href="/app"><span class="nav-ico">⌂</span>Home</a>
     <a class="nav {{ 'on' if nav == 'customers' }}" href="/app/customers"><span class="nav-ico">☺</span>Customers</a>
     <a class="nav {{ 'on' if nav == 'deals' }}" href="/app/deals"><span class="nav-ico">✦</span>Deals</a>
@@ -24,6 +26,7 @@
       <span class="who">{{ biz.email }}</span>
       <form method="post" action="/app/logout"><button class="secondary" type="submit">Log out</button></form>
     </div>
+    </nav>
   </aside>
   <main class="content">
     {% if biz and biz_paused(biz) and nav != 'guardrails' %}
@@ -50,5 +53,6 @@
     document.querySelectorAll("button[data-busy]").forEach(function (b) { b.disabled = false; delete b.dataset.busy; });
   });
 </script>
+<script src="/admin/static/responsive.js?v={{ asset_version }}"></script>
 </body>
 </html>
