@@ -67,7 +67,8 @@ def _first_with_offer(c, tid, skip_holdout=None):
 def test_customer_list_search_and_filters(biz):
     c, tid, ds = biz
     page = c.get("/app/customers").text
-    assert "120 customers" in page and ds.customers[0]["name"].split()[0] in c.get("/app/customers?sort=name").text
+    first_by_name = min(x["name"] for x in ds.customers)  # data depends on today's date, so not a fixed name
+    assert "120 customers" in page and first_by_name in c.get("/app/customers?sort=name").text
     ref = ds.customers[5]["external_ref"]
     found = c.get(f"/app/customers?q={ref.lower()}").text
     assert "1 customer match" in found and ref in found

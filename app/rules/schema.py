@@ -112,6 +112,8 @@ def check_rules(rules: RulesConfig, margins: dict[str, float], segment_keys: set
             if seg != "all" and seg not in segment_keys:
                 problems.append(f"{name}: unknown segment '{seg}'. Known: all, {', '.join(sorted(segment_keys))}.")
         if o.type == "percent_off":
+            if o.value > 90:
+                problems.append(f"{name} gives {o.value:g}%: a percentage discount can't be more than 90%.")
             fixed_cat = o.category not in ("from_cart", "top_category")
             if fixed_cat and caps.get("any") is not None and o.value > rules.cap_pct(o.category):
                 problems.append(f"{name} gives {o.value:g}% but the cap for {o.category} is "

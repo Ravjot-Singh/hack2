@@ -18,9 +18,12 @@ INTROS = {
     "win_back": "💛 <b>We miss you, {first}!</b>\n"
                 "It's been a while. Here's something special to welcome you back:",
     "birthday": "🎂 <b>Happy birthday week, {first}!</b>\nA little treat from all of us at {store}:",
-    "second_order": "👋 <b>Great to have you, {first}!</b>\nLoved your first order? Here's a thank-you for the next one:",
+    "second_order": "👋 <b>Great to have you, {first}!</b>\n"
+                    "Loved your first order? Here's a proper thank-you for the next one:",
     "points_expiry": "⏳ <b>{first}, {expiring} of your points expire on {expiry_date}.</b>\n"
-                     "Use them before they're gone, and we'll add a bonus:",
+                     "Use them on your next order before they're gone, and delivery's on us:",
+    "win_back_vip": "💛 <b>We've missed you, {first}!</b>\n"
+                    "You're one of our favourite customers, so here's something special to welcome you back:",
     "deal_flash": "⚡ <b>Deal of the day, {first}!</b>\nToday only, on your favourite {cat}:",
     "loyalty_bonus": "🌟 <b>Thank you, {first}!</b>\n"
                      "You're one of our favourite shoppers, so here's a little extra on your next order:",

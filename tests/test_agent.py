@@ -24,7 +24,7 @@ FEATS = dict(tenure_days=400, recency_days=20, orders_30=1, orders_90=2, orders_
              discount_share=0.3, return_rate=0.05, sessions_30=4, sessions_90=12, abandoned_carts_7d=1,
              abandoned_carts_30d=1, last_abandoned_cart_value=1800, last_abandoned_cart_category="fashion",
              top_category="fashion", points_balance=40, points_expiring_30d=0, next_points_expiry=None,
-             days_to_birthday=3, churn_risk=0.2, buy_anyway_prob=0.2, deal_affinity=0.35, expected_value_90d=2000,
+             days_to_birthday=3, churn_risk=0.35, buy_anyway_prob=0.2, deal_affinity=0.35, expected_value_90d=2000,
              segment="regular")
 SHORTLIST = evaluate(POLICY.rules, POLICY.catalog, CustomerContext(1, FEATS, "regular"), 0, NOON).eligible
 GOOD = {"offer_key": "birthday", "title": "🎂 Happy birthday week, Priya!",

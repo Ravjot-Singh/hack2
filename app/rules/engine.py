@@ -21,6 +21,9 @@ from app.features.conditions import check_conditions
 from app.rules.schema import MONETARY_TYPES, Offer, RulesConfig
 
 
+REDEEM_SHARE = 0.85  # share of buyers holding an offer who actually use it
+
+
 @dataclass(frozen=True)
 class SentOffer:
     offer_key: str
@@ -220,11 +223,13 @@ def evaluate(rules: RulesConfig, catalog: CatalogInfo, ctx: CustomerContext, bud
                   f"up to {_rs(liability)}).")
             continue
 
-        # Expected value: margin from purchases the offer causes, minus what we pay to everyone who redeems.
+        # Expected value: margin from the extra purchases the offer causes, minus the discount paid to everyone
+        # who uses it, including customers who would have bought anyway while it is valid (the real cost).
         margin = catalog.margins.get(cat) or catalog.margins.get(f.get("top_category") or "", catalog.avg_margin)
-        redeem = min(0.6, max(0.02, o.expected_response * (0.5 + f.get("deal_affinity", 0.33))))
-        incremental = redeem * (1 - f.get("buy_anyway_prob", 0))
-        exp_cost = redeem * est_discount
+        base = 1 - (1 - f.get("buy_anyway_prob", 0)) ** (o.valid_hours / (14 * 24))
+        lift = min(0.6, max(0.01, o.expected_response * (0.5 + f.get("deal_affinity", 0.33))))
+        incremental = lift * (1 - base)
+        exp_cost = (base + incremental) * REDEEM_SHARE * est_discount
         exp_net = incremental * est_order * margin / 100 - exp_cost
         if exp_net < lim.min_expected_net_rs:
             block(f"Not worth it: expected value {_rs(exp_net)} is below the {_rs(lim.min_expected_net_rs)} floor.")

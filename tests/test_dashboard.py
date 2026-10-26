@@ -89,13 +89,13 @@ def test_cross_site_posts_are_refused(client):
 
 
 def test_saving_rules_creates_version_used_by_engine(client):
-    r = client.post("/admin/rules", data=_form(**{"limits.daily_budget_rs": 31000, "offer.second_order.value": 150,
+    r = client.post("/admin/rules", data=_form(**{"limits.daily_budget_rs": 31000, "offer.second_order.value": 12,
                                                    "offer.second_order.min_order_value": 1599}),
                     auth=AUTH, headers=SAME_ORIGIN, follow_redirects=False)
     assert r.status_code == 303 and "saved=1" in r.headers["location"]
     policy = current_policy("shopkart", SHOPKART)
     assert policy.version_id is not None
-    assert policy.rules.limits.daily_budget_rs == 31000 and policy.rules.offer("second_order").value == 150
+    assert policy.rules.limits.daily_budget_rs == 31000 and policy.rules.offer("second_order").value == 12
     page = client.get(r.headers["location"], auth=AUTH).text
     assert "✓ Saved" in page and "<td>admin</td>" in page  # banner + change history row
 
@@ -104,7 +104,7 @@ def test_invalid_rules_are_explained_and_not_saved(client):
     r = client.post("/admin/rules", data=_form(**{"cap.electronics": 12}), auth=AUTH, headers=SAME_ORIGIN)
     assert r.status_code == 200 and "Not saved" in r.text and "above its margin" in r.text
     r = client.post("/admin/rules", data=_form(**{"offer.second_order.value": 300}), auth=AUTH, headers=SAME_ORIGIN)
-    assert "Not saved" in r.text and "cap for any" in r.text
+    assert "Not saved" in r.text and "more than 90%" in r.text
     with session_scope() as s:
         assert s.scalar(select(func.count()).select_from(RulesVersion)) == 0
     assert current_policy("shopkart", SHOPKART).version_id is None

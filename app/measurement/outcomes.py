@@ -6,7 +6,10 @@ the engine never sees. That makes the measurement honest: the engine's *estimate
 
   P(buy | no offer) = the customer's own chance of buying in the offer window
   P(buy | offer)    = 1 - (1 - P(buy | no offer)) * (1 - true lift)
-  true lift         = offer strength x price sensitivity x persona responsiveness x relevance
+  true lift         = offer strength x price sensitivity x persona responsiveness + relevance
+Offer strength follows what the customer actually saves as a share of their basket (a "20% off, max ₹200" offer
+on a ₹5,000 basket is worth 4%), calibrated so typical offers add a few percentage points of conversion and
+cart reminders around ten, in line with published e-commerce benchmarks.
 Most buyers who hold an offer use it, including those who would have bought anyway (that is the real cost
 of discounts, and why the engine avoids "sure buyers").
 """
@@ -22,7 +25,8 @@ PERSONA_RESPONSE = {
     "loyal_high_value": 0.6, "regular": 0.8, "bargain_hunter": 1.6, "occasional": 1.0,
     "new": 1.2, "at_risk": 0.9, "dormant": 0.35, "window_shopper": 0.7,
 }
-RELEVANCE = {"cart_recovery": 0.10, "birthday": 0.05, "points_expiry": 0.04}
+RELEVANCE = {"cart_recovery": 0.06, "birthday": 0.02, "points_expiry": 0.02}  # timely reasons to buy
+MAX_STRENGTH = 0.12
 REDEEM_IF_BOUGHT = 0.85
 
 
@@ -36,14 +40,18 @@ class SimOutcome:
 
 
 def offer_strength(offer_type: str, percent: float | None, amount_rs: int | None, points: int | None,
-                   est_order: float) -> float:
+                   est_order: float, max_discount_rs: int | None = None) -> float:
+    """How much the offer pulls, from the share of the basket the customer saves."""
+    order = max(est_order, 1)
     if offer_type == "percent_off":
-        return min(0.30, 0.04 + 0.012 * (percent or 0))
-    if offer_type == "flat_off":
-        return min(0.30, 0.04 + 1.2 * (amount_rs or 0) / max(est_order, 1))
-    if offer_type == "free_delivery":
-        return 0.05
-    return min(0.15, 0.02 + 0.0004 * (points or 0))
+        saved_pct = min(percent or 0, 100 * (max_discount_rs or order) / order)
+    elif offer_type == "flat_off":
+        saved_pct = 100 * (amount_rs or 0) / order
+    elif offer_type == "free_delivery":
+        return 0.025
+    else:  # bonus points feel worth less than the same amount off
+        return min(MAX_STRENGTH, 0.003 + 0.002 * 100 * (points or 0) / order)
+    return min(MAX_STRENGTH, 0.005 + 0.0045 * saved_pct)
 
 
 def discount_for(offer_type: str, percent, amount_rs, max_discount_rs, points, order_value: float,
@@ -69,19 +77,24 @@ def simulate(rng: random.Random, *, features: dict, true_segment: str, price_sen
         est_order = float(features["last_abandoned_cart_value"])
 
     p_buy = base
+    min_order = (offer or {}).get("min_order_value") or 0
     if offer:
-        lift = (offer_strength(offer["type"], offer.get("percent"), offer.get("amount_rs"), offer.get("points"),
-                               est_order)
-                * (0.4 + 1.2 * price_sensitivity) * PERSONA_RESPONSE.get(true_segment, 1.0)
+        strength = offer_strength(offer["type"], offer.get("percent"), offer.get("amount_rs"), offer.get("points"),
+                                  est_order, offer.get("max_discount_rs"))
+        if min_order > 1.5 * est_order:  # a minimum far above their usual basket puts people off
+            strength *= 0.5
+        lift = (strength * (0.4 + 1.2 * price_sensitivity) * PERSONA_RESPONSE.get(true_segment, 1.0)
                 + RELEVANCE.get(offer["key"], 0.0))
         p_buy = 1 - (1 - base) * (1 - min(lift, 0.9))
     if rng.random() >= p_buy:
         return SimOutcome(False, False, 0, 0, 0)
 
     value = max(99.0, rng.lognormvariate(math.log(est_order), 0.35))
+    if offer and value < min_order and rng.random() < 0.5:
+        value = float(min_order)  # many shoppers add items to reach the minimum and use the offer
     redeemed = False
     cost = 0
-    if offer and value >= (offer.get("min_order_value") or 0) and rng.random() < REDEEM_IF_BOUGHT:
+    if offer and value >= min_order and rng.random() < REDEEM_IF_BOUGHT:
         redeemed = True
         cost = discount_for(offer["type"], offer.get("percent"), offer.get("amount_rs"),
                             offer.get("max_discount_rs"), offer.get("points"), value, delivery_fee, point_value)

@@ -124,23 +124,21 @@ pytest                               # tests use a throwaway SQLite DB, never Ne
 
 ## Build stages
 1. Scaffold ✅  2. Synthetic data ✅  3. Features & segments ✅  4. Rules engine ✅  5. Telegram bot ✅
-6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning (deferred)  9. Dashboard ✅
+6. Agent + validator ✅  7. Triggers & measurement ✅  8. Offer tuning ✅  9. Dashboard ✅
 Operator portal (plan: ~/.claude/plans/...federated-pelican.md): P1 foundation ✅  P2 customers & single offers ✅
 P3 deals ✅  P4 data upload ✅  P5 settings ✅  P6 polish ✅ (friendly HTML error pages for /app in browsers,
 JSON otherwise; `routes._plain` filter rewrites engine reasons for operators; isolation sweep test; mobile layout).  10. Deploy (Render) + README: LAST, only when the user says.
 
-### Stage 8 backlog: offer tuning (after measurement, so changes are judged on uplift/redemption data)
-- Make offers more attractive where margin allows. User feedback: "₹100 off" for a new customer's second order
-  feels weak — e.g. bigger flat amount, % off with a cap, or free delivery + discount combo, while staying inside
-  the 10% store-wide cap (raise min order, or target a higher-cap category).
-- Review every offer's value vs. its expected_net in `scripts/preview_offers.py`; tune values, min orders,
-  validity windows and priorities in `tenants/shopkart/rules.yaml`.
-- Consider tiered values by customer value (e.g. bigger win-back for formerly high spenders).
-- Re-check message wording/appeal of templates once the AI intro (Stage 6) is in.
-- Use `scripts/simulate_campaign.py` results: "Points expiring" shows no clear uplift (-2% ± 23%) and "Loyalty
-  bonus" to loyal high-value customers returns < Rs 1 per Rs 1 — rethink or retarget them.
-- Calibrate the simulated response model (`app/measurement/outcomes.py`): uplifts like +32 pts for cart comeback
-  look generous vs. real-world benchmarks (typically a few points); lower `offer_strength`/`RELEVANCE`.
+### Stage 8: offer tuning (done)
+- Simulated responses calibrated to real-world sizes (`outcomes.py`: lift scales with % of the order saved,
+  capped at 12 pts; a min order far above the usual basket halves it; some customers stretch to the min order).
+- Engine value estimate counts cannibalisation: everyone who would buy anyway while the offer is valid also
+  redeems it (`REDEEM_SHARE`), so the value floor now skips sure buyers by itself.
+- Offers retuned: second order = 15% off favourite (max ₹250, min ₹699); tiered VIP win-back (20%, max ₹500,
+  for former ₹15k+ spenders); points expiry = free delivery; loyalty bonus only for loyal customers slowing down
+  (churn ≥ 0.3); `check_rules` refuses percentages above 90%.
+- 7-day simulation, 5,000 customers: ₹0.83 → ₹3.31 back per ₹1 of discount, uplift +4.0 → +6.5 pts, extra
+  profit ₹25.7k → ₹60.8k with ₹12.6k less discount; the engine's own forecast is now conservative, not 4× high.
 
 ## Conventions
 - Python 3.11, type hints, pydantic for config/rule schemas.

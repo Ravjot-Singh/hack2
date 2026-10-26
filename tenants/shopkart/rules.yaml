@@ -52,7 +52,9 @@ measurement:
 #   segments         which customer groups may get it (see segments.yaml), or [all]
 #   audience         extra conditions, same style as segments.yaml (e.g. abandoned_carts_7d_min: 1)
 #   priority         1-10; when several offers fit, higher priority is preferred
-#   expected_response  our guess of how many people use it (0.2 = 20%); used to estimate value
+#   expected_response  our estimate of the *extra* chance this offer makes a typical customer buy (0.08 = 8 points);
+#                      used with each customer's own data to estimate the offer's profit (offers that would lose
+#                      money are skipped by the "minimum expected profit" limit)
 
 offers:
   - key: cart_recovery
@@ -68,7 +70,7 @@ offers:
     audience:
       abandoned_carts_7d_min: 1
     priority: 9
-    expected_response: 0.25
+    expected_response: 0.12
 
   - key: win_back
     label: We miss you
@@ -78,11 +80,11 @@ offers:
     category: top_category
     fallback_category: any   # if we don't know their favourite, make it store-wide (capped at 10%)
     min_order_value: 699
-    max_discount_rs: 400
+    max_discount_rs: 300
     valid_hours: 168
     segments: [at_risk, dormant]
     priority: 8
-    expected_response: 0.08
+    expected_response: 0.06
 
   - key: birthday
     label: Birthday treat
@@ -97,35 +99,37 @@ offers:
     audience:
       days_to_birthday_max: 7
     priority: 8
-    expected_response: 0.2
+    expected_response: 0.08
 
   - key: second_order
     label: Welcome back
-    description: Turn a new customer's first order into a habit.
-    type: flat_off
-    value: 100
-    category: any
-    min_order_value: 1099
+    description: Turn a new customer's first order into a habit, with a real discount on what they liked.
+    type: percent_off
+    value: 15
+    category: top_category
+    fallback_category: any   # no favourite yet: store-wide, capped at 10%
+    min_order_value: 699
+    max_discount_rs: 250
     valid_hours: 168
     segments: [new]
     audience:
       orders_365_max: 1
-    priority: 7
-    expected_response: 0.2
+    priority: 8
+    expected_response: 0.08
 
   - key: points_expiry
     label: Points expiring
-    description: Remind them their points are about to expire, with a few bonus points if they order.
-    type: bonus_points
-    value: 50
+    description: Remind them their points are about to expire, and make it easy to use them with free delivery.
+    type: free_delivery
+    value: 0
     category: any
     min_order_value: 299
     valid_hours: 168
     segments: [all]
     audience:
-      points_expiring_30d_min: 20
-    priority: 7
-    expected_response: 0.2
+      points_expiring_30d_min: 50
+    priority: 6
+    expected_response: 0.04
 
   - key: deal_flash
     label: Deal of the day
@@ -138,28 +142,50 @@ offers:
     valid_hours: 24
     segments: [bargain_hunter]
     priority: 6
-    expected_response: 0.3
+    expected_response: 0.1
 
   - key: loyalty_bonus
     label: Loyalty bonus
-    description: Thank our best customers with points instead of discounts (protects margin).
+    description: >-
+      Keep good customers who are starting to slow down, with points instead of a discount (protects margin).
+      Customers buying as usual don't get it: they'd buy anyway.
     type: bonus_points
-    value: 100
+    value: 150
     category: any
-    min_order_value: 999
+    min_order_value: 1499
     valid_hours: 168
     segments: [loyal_high_value, regular]
-    priority: 5
-    expected_response: 0.25
+    audience:
+      churn_risk_min: 0.3
+    priority: 6
+    expected_response: 0.04
 
   - key: free_delivery
     label: Free delivery
-    description: Remove the last bit of friction for browsers and occasional buyers.
+    description: Remove the last bit of friction for active browsers and occasional buyers.
     type: free_delivery
     value: 0
     category: any
     min_order_value: 299
     valid_hours: 72
     segments: [window_shopper, occasional, new]
+    audience:
+      sessions_30_min: 2
     priority: 5
-    expected_response: 0.12
+    expected_response: 0.03
+
+  - key: win_back_vip
+    label: We miss you (VIP)
+    description: A bigger win-back offer for drifting customers who used to spend a lot with us.
+    type: percent_off
+    value: 20
+    category: top_category
+    fallback_category: any
+    min_order_value: 999
+    max_discount_rs: 500
+    valid_hours: 168
+    segments: [at_risk, dormant]
+    audience:
+      monetary_365_min: 15000
+    priority: 9
+    expected_response: 0.07

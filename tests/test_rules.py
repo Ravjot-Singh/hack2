@@ -22,7 +22,8 @@ def feats(**kw):
              aov=1500, discount_share=0.3, return_rate=0.05, sessions_30=4, sessions_90=12,
              abandoned_carts_7d=0, abandoned_carts_30d=0, last_abandoned_cart_value=None,
              last_abandoned_cart_category=None, top_category="fashion", points_balance=0, points_expiring_30d=0,
-             days_to_birthday=200, churn_risk=0.2, buy_anyway_prob=0.2, deal_affinity=0.35, expected_value_90d=2000)
+             days_to_birthday=200, churn_risk=0.35, buy_anyway_prob=0.2, deal_affinity=0.35, expected_value_90d=2000)
+    # churn_risk 0.35: a regular starting to slow down, so the loyalty bonus applies by default
     f.update(kw)
     return f
 
@@ -110,7 +111,10 @@ def test_buy_anyway_guard_blocks_money_offers_but_not_points():
     d = run(buy_anyway_prob=0.8, abandoned_carts_7d=1, last_abandoned_cart_category="fashion",
             last_abandoned_cart_value=1200)
     assert "cart_recovery" not in keys(d) and "buy anyway" in reason(d, "cart_recovery")
-    assert "loyalty_bonus" in keys(d)
+    # Points aren't stopped by the guard, but the value estimate still skips them for near-certain buyers:
+    # the points would mostly reward a purchase that was happening anyway.
+    assert "Not worth it" in reason(d, "loyalty_bonus")
+    assert "loyalty_bonus" in keys(run(buy_anyway_prob=0.3))
 
 
 def test_serial_returners_get_no_discounts():
@@ -139,9 +143,22 @@ def test_store_wide_offer_excludes_low_cap_categories():
 
 
 def test_daily_budget():
-    d = run(days_to_birthday=3, budget_used=POLICY.rules.limits.daily_budget_rs - 100)
-    assert "birthday" not in keys(d) and "budget" in reason(d, "birthday")
-    assert "loyalty_bonus" in keys(d)  # 100 points = Rs 100 still fits
+    d = run(days_to_birthday=3, budget_used=POLICY.rules.limits.daily_budget_rs - 200)
+    assert "birthday" not in keys(d) and "budget" in reason(d, "birthday")  # up to Rs 250 doesn't fit
+    assert "loyalty_bonus" in keys(d)  # 150 points = Rs 150 still fits
+
+
+def test_loyalty_bonus_only_for_customers_slowing_down():
+    assert "loyalty_bonus" not in keys(run(churn_risk=0.1))  # buying as usual: they'd buy anyway
+    assert "loyalty_bonus" in keys(run(churn_risk=0.4))
+
+
+def test_vip_win_back_for_former_big_spenders():
+    drifting = dict(segment="at_risk", churn_risk=0.7, buy_anyway_prob=0.02, top_category="fashion")
+    assert "win_back_vip" in keys(run(**drifting, monetary_365=30000, aov=3000))
+    assert "win_back_vip" not in keys(run(**drifting, monetary_365=4000))
+    vip = next(c for c in run(**drifting, monetary_365=30000, aov=3000).eligible if c.offer_key == "win_back_vip")
+    assert vip.percent == 20 and vip.max_discount_rs == 500
 
 
 def test_expected_value_floor():
@@ -189,7 +206,9 @@ def _problems(raw):
     (lambda r: r["offers"][0].update(segments=["vip"]), "unknown segment 'vip'"),
     (lambda r: r["offers"][0].update(max_discount_rs=900), "store-wide"),
     (lambda r: r["offers"][2].update(category="fashion", value=40), "cap for fashion"),
-    (lambda r: r["offers"][3].update(value=200), "above the 10% cap"),
+    (lambda r: r["offers"][3].update(type="flat_off", category="any", fallback_category=None, max_discount_rs=None,
+                                     value=200), "above the 10% cap"),
+    (lambda r: r["offers"][3].update(value=120), "can't be more than 90%"),
     (lambda r: r["offers"][6].update(value=800), "worth more than"),
     (lambda r: r["offers"].append(dict(r["offers"][0])), "more than once"),
 ])
