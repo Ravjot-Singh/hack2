@@ -203,7 +203,7 @@ async def rules_reset(request: Request, biz: Business = Depends(current_business
     catalog = {k: {"label": biz.policy.catalog.labels[k], "margin_pct": m}
                for k, m in biz.policy.catalog.margins.items()}
     if biz.tenant.path and (biz.tenant.path / "rules.yaml").exists():
-        data = yaml.safe_load((biz.tenant.path / "rules.yaml").read_text(encoding="utf-8"))
+        data = adapt_rules(yaml.safe_load((biz.tenant.path / "rules.yaml").read_text(encoding="utf-8")), catalog)
     else:
         data = default_rules(catalog)
     save_rules(biz.tenant.slug, biz.tenant_id, biz.tenant.path, data, biz.email, "Reset to the default rules",

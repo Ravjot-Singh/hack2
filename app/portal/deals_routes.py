@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, update
 
 from app.dashboard import queries
 from app.db.models import Customer, Deal, OfferDecision, TelegramUser
@@ -154,11 +154,16 @@ def deal_page(request: Request, deal_id: int, biz: Business = Depends(current_bu
 
 
 def _mark_sending(biz: Business, deal_id: int) -> None:
+    """Draft -> sending in one conditional UPDATE, so two clicks (or two tabs) can never launch a deal twice."""
     with session_scope() as s:
-        d = _deal_or_404(s, biz, deal_id)
-        if d.status != "draft":
-            raise HTTPException(400, "This deal was already launched")
-        d.status, d.launched_at, d.progress = "sending", base._now(), {"stage": "planning"}
+        _deal_or_404(s, biz, deal_id)
+    now = base._now()
+    with session_scope() as s:
+        changed = s.execute(update(Deal).where(Deal.id == deal_id, Deal.tenant_id == biz.tenant_id,
+                                               Deal.status == "draft")
+                            .values(status="sending", launched_at=now, progress={"stage": "planning"})).rowcount
+    if changed != 1:
+        raise HTTPException(400, "This deal was already launched")
 
 
 @router.post("/deals/{deal_id}/launch")
@@ -167,6 +172,12 @@ async def deal_launch(request: Request, deal_id: int, biz: Business = Depends(cu
     await asyncio.to_thread(_mark_sending, biz, deal_id)
     deal_engine.start_deal(deal_id, biz.tenant, biz.tenant_id, request.app.state.bots, base._now)
     return RedirectResponse(f"/app/deals/{deal_id}", status_code=303)
+
+
+def _cell(value) -> str:
+    """Spreadsheets run cells starting with = + - @ as formulas: names come from uploaded data, so defuse them."""
+    text = str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
 
 
 @router.get("/deals/{deal_id}/coupons.csv")
@@ -186,8 +197,8 @@ def deal_coupons(deal_id: int, biz: Business = Depends(current_business)):
     w = csv.writer(buf)
     w.writerow(["customer_id", "name", "phone", "email", "coupon", "offer", "terms", "valid_until", "on_telegram"])
     for ref, cname, phone, email, coupon, headline, terms, until, chat in rows:
-        w.writerow([ref, cname, phone or "", email or "", coupon, headline, terms,
-                    until.strftime("%Y-%m-%d %H:%M") if until else "", "yes" if chat else "no"])
+        w.writerow([_cell(v) for v in (ref, cname, phone or "", email or "", coupon, headline, terms,
+                                        until.strftime("%Y-%m-%d %H:%M") if until else "", "yes" if chat else "no")])
     filename = "".join(ch if ch.isalnum() else "-" for ch in name.lower()).strip("-") or "deal"
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
                              headers={"Content-Disposition": f'attachment; filename="{filename}-coupons.csv"'})

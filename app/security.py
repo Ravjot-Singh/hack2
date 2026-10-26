@@ -51,6 +51,26 @@ def decrypt_secret(token: str | None) -> str | None:
         return None  # key changed: treat as not configured
 
 
+def _link_sig(tenant_id: int, customer_id: int) -> str:
+    key = hashlib.sha256(("telegram-link:" + get_settings().session_secret).encode()).digest()
+    mac = hmac.new(key, f"{tenant_id}:{customer_id}".encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(mac).decode()[:22]
+
+
+def link_token(tenant_id: int, customer_id: int) -> str:
+    """Telegram /start parameter that links a chat to one customer (fits Telegram's 64-char [A-Za-z0-9_-] limit)."""
+    return f"c{customer_id}_{_link_sig(tenant_id, customer_id)}"
+
+
+def read_link_token(tenant_id: int, token: str) -> int | None:
+    """The customer id a link token was made for, or None if it is forged or for another business."""
+    head, _, sig = (token or "").partition("_")
+    if not head.startswith("c") or not head[1:].isdigit() or len(head) > 12:
+        return None
+    customer_id = int(head[1:])
+    return customer_id if hmac.compare_digest(sig, _link_sig(tenant_id, customer_id)) else None
+
+
 def insecure_defaults() -> list[str]:
     """Settings still at their placeholder values (fatal on a public server)."""
     st = get_settings()

@@ -16,6 +16,14 @@
     {% else %}<span class="badge">Not on Telegram</span>{% endif %}
   </div>
 </div>
+{% if not tg.linked %}
+<p class="small muted">
+  {% if invite %}Invite them to get offers on Telegram: send them this personal link (SMS, email, your app):
+  <code class="invite-link">{{ invite }}</code>
+  {% else %}Connect your Telegram bot in <a href="/app/settings#bot">Settings</a> to get a personal invite link for
+  this customer.{% endif %}
+</p>
+{% endif %}
 
 <div class="grid cust-grid">
 <div>

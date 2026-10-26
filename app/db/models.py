@@ -46,6 +46,8 @@ class Account(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Bumped on logout / password change: session cookies carry it, so older cookies stop working.
+    session_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Customer(Base):

@@ -113,6 +113,17 @@ every AI choice before anything is sent.
 - Decision pipeline: features → rules engine shortlist → holdout (proactive only) → AI chooser → validator →
   deliver/push → log (+ simulated outcome for simulations).
 
+- Hardening (break-it review, `tests/test_hardening.py`): file-tenant rules are fitted to the current catalog
+  (`adapt_rules`) and `current_policy` never raises; the persona picker only hands out synthetic customers
+  (`true_segment` set), real customers join via a signed invite link `t.me/<bot>?start=<security.link_token>`
+  shown on the customer page; ₹-off offers are checked as amount ÷ min order against the resolved category's cap
+  and store-wide ones exclude lower-cap categories; operator sends refuse a repeat within 2 min and portal submit
+  buttons disable after one click; deal launch is a conditional `UPDATE … WHERE status='draft'`; sessions carry
+  `accounts.session_version` (bumped by logout / password change, migration 0012); login limits are per
+  (address, email) and per address, sign-ups 5 per address per hour (behind a proxy run uvicorn with
+  `--proxy-headers --forwarded-allow-ips='*'` so the real address is used); every response sends
+  X-Frame-Options DENY / `frame-ancestors 'none'`; coupon CSV cells starting with = + - @ are prefixed with '.
+
 ## Commands
 ```
 pip install -r requirements.txt

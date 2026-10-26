@@ -186,3 +186,5 @@ details summary { cursor: pointer; color: var(--accent); }
 .segs-checks { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; min-width: 280px; }
 .segs-checks label { white-space: nowrap; }
 .desc { color: var(--muted); font-size: 12px; }
+
+.invite-link { word-break: break-all; user-select: all; }

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pydantic import ValidationError
+from sqlalchemy import select
 from telegram.error import TelegramError
 
+from app.db.models import OfferDecision
 from app.db.session import session_scope
 from app.delivery.push import push_offer, with_bot
 from app.offers import service
@@ -21,6 +23,7 @@ from app.rules.schema import DYNAMIC_CATEGORIES, RulesConfig, check_rules
 log = logging.getLogger(__name__)
 
 CUSTOM_KEY = "custom"
+DUPLICATE_WINDOW = timedelta(minutes=2)
 FIELD_NAMES = {"value": "Amount", "min_order_value": "Minimum order", "max_discount_rs": "Maximum discount",
                "valid_hours": "Valid for", "type": "Offer type", "category": "Category", "label": "Offer name"}
 
@@ -88,8 +91,11 @@ def check_custom(biz: Business, customer_id: int, form: dict, now: datetime) -> 
             "valid_hours": int(float(form.get("valid_hours") or 72)),
             "segments": ["all"], "priority": 10, "expected_response": 0.15,
         }
-    except ValueError:
+    except (ValueError, OverflowError):
         result.problems.append("Please enter numbers only in the amount, minimum order, maximum discount and validity.")
+        return result
+    if otype in ("flat_off", "bonus_points") and offer["value"] < 1 or otype == "percent_off" and offer["value"] <= 0:
+        result.problems.append("Enter an amount above zero.")
         return result
     if offer["category"] not in DYNAMIC_CATEGORIES and offer["category"] not in policy.catalog.margins:
         result.problems.append("Please choose a category.")
@@ -114,6 +120,20 @@ def check_custom(biz: Business, customer_id: int, form: dict, now: datetime) -> 
     elif not result.decision.eligible:
         result.blocked += [b.reason for b in result.decision.blocked]
     return result
+
+
+def just_sent(biz: Business, customer_id: int, now: datetime) -> bool:
+    """An operator offer went to this customer moments ago (double click, resubmitted form, two tabs)."""
+    with session_scope() as s:
+        return s.scalar(select(OfferDecision.id).where(
+            OfferDecision.tenant_id == biz.tenant_id, OfferDecision.customer_id == customer_id,
+            OfferDecision.trigger == "operator", OfferDecision.outcome.in_(("sent", "deferred")),
+            OfferDecision.created_at > now - DUPLICATE_WINDOW).limit(1)) is not None
+
+
+DUPLICATE_FLASH = {"kind": "warn", "title": "Not sent again",
+                   "lines": ["You sent this customer an offer a moment ago. Wait a couple of minutes if you really "
+                             "want to send another."]}
 
 
 def send(biz: Business, customer_id: int, policy: TenantPolicy, now: datetime) -> OfferResult:

@@ -57,6 +57,23 @@ app = FastAPI(title="Personalised Offer Engine", lifespan=lifespan)
 _settings = get_settings()
 app.add_middleware(SessionMiddleware, secret_key=_settings.session_secret, session_cookie="oe_session",
                    max_age=14 * 24 * 3600, same_site="lax", https_only=bool(_settings.public_base_url))
+SECURITY_HEADERS = {
+    # No other site may frame our pages (a framed portal could be clicked into launching a deal).
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 app.mount("/admin/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(dashboard_router)
 app.include_router(portal_router)

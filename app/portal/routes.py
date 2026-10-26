@@ -19,7 +19,9 @@ from app.db.models import Customer, Deal, RulesVersion, TelegramUser
 from app.db.session import session_scope
 from app.portal import offers as portal_offers
 from app.portal import queries as pq
-from app.portal.auth import AuthError, Business, current_business, login, portal_available, register, same_origin
+from app.portal.auth import (AuthError, Business, current_business, end_session, login, portal_available, register,
+                             same_origin, session_business, start_session)
+from app.security import link_token
 
 router = APIRouter(prefix="/app")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -93,7 +95,7 @@ def _safe_next(target: str | None) -> str:
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, next: str | None = None):
     portal_available()
-    if request.session.get("account_id"):
+    if session_business(request) is not None:
         return RedirectResponse(_safe_next(next), status_code=303)
     return page(request, "login.html", None, "login", next=_safe_next(next), error=None, email="")
 
@@ -106,8 +108,7 @@ def login_submit(request: Request, email: str = Form(""), password: str = Form("
         account_id = login(email, password, request.client.host if request.client else "?", _now())
     except AuthError as exc:
         return page(request, "login.html", None, "login", next=_safe_next(next), error=str(exc), email=email)
-    request.session.clear()
-    request.session["account_id"] = account_id
+    start_session(request, account_id)
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -123,19 +124,19 @@ def register_submit(request: Request, business_name: str = Form(""), email: str 
     portal_available()
     same_origin(request)
     try:
-        account_id = register(business_name, email, password, confirm, _now())
+        account_id = register(business_name, email, password, confirm, _now(),
+                              request.client.host if request.client else "?")
     except AuthError as exc:
         return page(request, "register.html", None, "register", error=str(exc),
                     form={"business_name": business_name, "email": email})
-    request.session.clear()
-    request.session["account_id"] = account_id
+    start_session(request, account_id)
     return RedirectResponse("/app?welcome=1", status_code=303)
 
 
 @router.post("/logout")
 def logout(request: Request):
     same_origin(request)
-    request.session.clear()
+    end_session(request)
     return RedirectResponse("/app/login", status_code=303)
 
 
@@ -227,7 +228,11 @@ def _customer_page(request: Request, biz: Business, customer_id: int, check=None
         hours = max(1, round((now - last_sent).total_seconds() / 3600))
         recent_note = (f"Heads-up: they got an offer {hours}h ago. Automatic offers wait {gap_h}h between offers; "
                        "sending by hand skips that wait.")
+    # Real customers join the bot through their own signed link (never via the demo persona picker).
+    invite = (f"https://t.me/{biz.tenant.bot_username}?start={link_token(biz.tenant_id, customer_id)}"
+              if biz.tenant.bot_username else None)
     return page(request, "customer.html", biz, "customers", c=cust, f=f, tg=tg, decision=decision, history=history,
+                invite=invite,
                 check=check, recent_note=recent_note, custom=custom_form or portal_offers.custom_form_defaults(decision, f),
                 bot_connected=bool(biz.tenant.bot_token), **_labels(biz))
 
@@ -246,6 +251,9 @@ async def customer_send(request: Request, customer_id: int, offer_key: str = For
     policy = biz.policy if offer_key == "best" else portal_offers.only_offer(biz.policy, offer_key)
     if policy is None:
         raise HTTPException(400, "Unknown offer")
+    if portal_offers.just_sent(biz, customer_id, _now()):
+        request.session["flash"] = portal_offers.DUPLICATE_FLASH
+        return RedirectResponse(f"/app/customers/{customer_id}", status_code=303)
     result = portal_offers.send(biz, customer_id, policy, _now())
     request.session["flash"] = await portal_offers.deliver(request.app.state.bots, biz, result)
     return RedirectResponse(f"/app/customers/{customer_id}", status_code=303)
@@ -259,6 +267,9 @@ async def customer_custom(request: Request, customer_id: int, biz: Business = De
     check = portal_offers.check_custom(biz, customer_id, form, _now())
     if form.get("action") != "send" or not check.ok:
         return _customer_page(request, biz, customer_id, check=check, custom_form=form)
+    if portal_offers.just_sent(biz, customer_id, _now()):
+        request.session["flash"] = portal_offers.DUPLICATE_FLASH
+        return RedirectResponse(f"/app/customers/{customer_id}", status_code=303)
     result = portal_offers.send(biz, customer_id, check.policy, _now())
     request.session["flash"] = await portal_offers.deliver(request.app.state.bots, biz, result)
     return RedirectResponse(f"/app/customers/{customer_id}", status_code=303)

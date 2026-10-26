@@ -29,7 +29,7 @@ from app.offers import service
 from app.offers.campaign import run_simulated_campaign
 from app.rules.engine import CustomerContext, evaluate
 from app.rules.forms import friendly_errors, rules_form_data
-from app.rules.policy import TenantPolicy, current_policy, default_rules, save_rules
+from app.rules.policy import TenantPolicy, adapt_rules, current_policy, default_rules, save_rules
 from app.rules.schema import RulesError
 from app.tenants.registry import TenantConfig, get_tenants
 from app.triggers.events import EVENTS, fire_event, run_live_campaign
@@ -203,11 +203,12 @@ async def rules_save(request: Request, ctx: Ctx = Depends(get_ctx), user: str = 
 
 @router.post("/rules/reset")
 def rules_reset(ctx: Ctx = Depends(get_ctx), user: str = Depends(require_admin)):
+    catalog = {k: {"label": ctx.policy.catalog.labels[k], "margin_pct": m} for k, m in ctx.policy.catalog.margins.items()}
     if ctx.tenant.path and (ctx.tenant.path / "rules.yaml").exists():
-        data, note = yaml.safe_load((ctx.tenant.path / "rules.yaml").read_text(encoding="utf-8")), "Reset to rules.yaml"
+        data = adapt_rules(yaml.safe_load((ctx.tenant.path / "rules.yaml").read_text(encoding="utf-8")), catalog)
+        note = "Reset to rules.yaml"
     else:
-        data, note = default_rules({k: {"label": ctx.policy.catalog.labels[k], "margin_pct": m}
-                                    for k, m in ctx.policy.catalog.margins.items()}), "Reset to default rules"
+        data, note = default_rules(catalog), "Reset to default rules"
     save_rules(ctx.tenant.slug, ctx.tenant_id, ctx.tenant.path, data, user, note, _now())
     return RedirectResponse(f"/admin/rules?t={ctx.tenant.slug}&saved=1", status_code=303)
 

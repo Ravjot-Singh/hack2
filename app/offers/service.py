@@ -57,8 +57,30 @@ def touch_user(tenant_id: int, chat_id: int, tg_name: str | None, now: datetime)
         return {"id": u.id, "customer_id": u.customer_id, "opted_out": u.opted_out}
 
 
+def has_demo_customers(tenant_id: int) -> bool:
+    """Synthetic shoppers exist (demo data): the persona picker may hand them out. Real customers never."""
+    with session_scope() as s:
+        return s.scalar(select(Customer.id).where(Customer.tenant_id == tenant_id,
+                                                  Customer.true_segment.is_not(None)).limit(1)) is not None
+
+
+def link_customer(tenant_id: int, chat_id: int, customer_id: int) -> bool:
+    """Link the chat to the customer a signed invite link was made for (any earlier chat of theirs is unlinked)."""
+    with session_scope() as s:
+        c = s.get(Customer, customer_id)
+        u = s.scalar(select(TelegramUser).where(TelegramUser.tenant_id == tenant_id, TelegramUser.chat_id == chat_id))
+        if c is None or c.tenant_id != tenant_id or u is None:
+            return False
+        for other in s.scalars(select(TelegramUser).where(TelegramUser.customer_id == customer_id,
+                                                          TelegramUser.id != u.id)):
+            other.customer_id = None
+        u.customer_id = customer_id
+        return True
+
+
 def assign_persona(tenant_id: int, chat_id: int, segment: str | None) -> int | None:
-    """Link the chat to a random unlinked synthetic customer (optionally from one segment)."""
+    """Link the chat to a random unlinked synthetic customer (optionally from one segment). Customers from the
+    business's own uploaded data are never handed to a stranger this way: they join through an invite link."""
     with session_scope() as s:
         u = s.scalar(select(TelegramUser).where(TelegramUser.tenant_id == tenant_id, TelegramUser.chat_id == chat_id))
         if u is None:
@@ -66,8 +88,9 @@ def assign_persona(tenant_id: int, chat_id: int, segment: str | None) -> int | N
         u.customer_id = None
         s.flush()
         taken = select(TelegramUser.customer_id).where(TelegramUser.customer_id.is_not(None))
-        q = select(CustomerFeature.customer_id).where(
-            CustomerFeature.tenant_id == tenant_id, CustomerFeature.customer_id.not_in(taken))
+        q = (select(CustomerFeature.customer_id).join(Customer, Customer.id == CustomerFeature.customer_id)
+             .where(CustomerFeature.tenant_id == tenant_id, CustomerFeature.customer_id.not_in(taken),
+                    Customer.true_segment.is_not(None)))
         if segment:
             q = q.where(CustomerFeature.segment == segment)
         cid = s.scalar(q.order_by(func.random()).limit(1))

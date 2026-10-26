@@ -99,7 +99,7 @@ class DealSpec:
                 valid_hours=int(float(form.get("valid_hours") or 72)),
                 budget_rs=int(float(form.get("budget_rs") or 0)),
             )
-        except ValueError:
+        except (ValueError, OverflowError):
             return None, ["Please enter numbers only in the amount, minimum order, maximum discount and budget."]
         return spec, []
 
@@ -128,6 +128,8 @@ def validate_spec(spec: DealSpec, policy: TenantPolicy) -> list[str]:
         problems.append("Each customer's offer should be valid for between 12 hours and 30 days.")
     if spec.budget_rs < 1:
         problems.append("Set a budget for the deal (the most it may cost you in total).")
+    if spec.budget_rs > 1_000_000_000 or spec.min_order_value > 10_000_000:
+        problems.append("That budget or minimum order is too large.")
     if problems:
         return problems
     # The amount itself must fit the per-offer limits (percentages are capped per category later).

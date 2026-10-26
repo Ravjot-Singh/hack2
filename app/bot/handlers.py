@@ -6,6 +6,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from html import escape
 
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -16,6 +17,7 @@ from app.delivery import templates
 from app.delivery.push import offer_keyboard
 from app.offers import service
 from app.rules.policy import TenantPolicy, current_policy
+from app.security import read_link_token
 from app.tenants.registry import TenantConfig
 
 log = logging.getLogger(__name__)
@@ -83,9 +85,23 @@ async def _send_profile(update: Update, bc: BotContext, customer_id: int, edit: 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bc = _ctx(context)
     user = await _user(update, bc)
+    args = getattr(context, "args", None) or []
+    if args:  # t.me/<bot>?start=<token>: a personal invite link from the business
+        cid = read_link_token(bc.tenant_id, args[0])
+        if cid is not None and await asyncio.to_thread(service.link_customer, bc.tenant_id,
+                                                       update.effective_chat.id, cid):
+            await update.effective_chat.send_message(f"✅ You're connected to {escape(bc.tenant.name)}. "
+                                                     "Your offers will arrive here.", parse_mode=ParseMode.HTML)
+            await _send_profile(update, bc, cid)
+            return
+        await update.effective_chat.send_message("This link isn't valid any more. Ask the store for a new one.")
+        return
     if user["customer_id"]:
         await update.effective_chat.send_message(f"👋 Welcome back to {bc.tenant.name}!")
         await _send_profile(update, bc, user["customer_id"])
+        return
+    if not await asyncio.to_thread(service.has_demo_customers, bc.tenant_id):
+        await update.effective_chat.send_message(templates.invite_only(bc.tenant.name), parse_mode=ParseMode.HTML)
         return
     first = update.effective_user.first_name if update.effective_user else "there"
     await update.effective_chat.send_message(templates.welcome(bc.tenant.name, first), parse_mode=ParseMode.HTML,
@@ -95,6 +111,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bc = _ctx(context)
     await _user(update, bc)
+    if not await asyncio.to_thread(service.has_demo_customers, bc.tenant_id):
+        await update.effective_chat.send_message(templates.invite_only(bc.tenant.name), parse_mode=ParseMode.HTML)
+        return
     await update.effective_chat.send_message("Which kind of shopper would you like to be?",
                                              reply_markup=_segment_keyboard(bc))
 
@@ -190,8 +209,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         elif response == "claimed":
             await q.answer("Claimed! 🎉")
             await update.effective_chat.send_message(
-                f"🎉 <b>{info['headline']}</b> is yours!\nUse code <code>{info['coupon']}</code> at checkout.\n"
-                f"<i>{info['terms']}</i>\n\n<i>(Demo store: nothing is charged.)</i>", parse_mode=ParseMode.HTML)
+                f"🎉 <b>{escape(info['headline'] or '')}</b> is yours!\n"
+                f"Use code <code>{escape(info['coupon'] or '')}</code> at checkout.\n"
+                f"<i>{escape(info['terms'] or '')}</i>\n\n<i>(Demo store: nothing is charged.)</i>",
+                parse_mode=ParseMode.HTML)
         else:
             await q.answer("No problem!")
             await update.effective_chat.send_message("👍 No problem. We'll keep the next one relevant.")

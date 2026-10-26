@@ -211,11 +211,26 @@ def evaluate(rules: RulesConfig, catalog: CatalogInfo, ctx: CustomerContext, bud
             est_discount = min(est_order * pct / 100, max_rs)
         elif o.type == "flat_off":
             amount = int(o.value)
+            if amount <= 0 or o.min_order_value <= 0:
+                block("A ₹ discount needs an amount and a minimum order.")
+                continue
+            # The worst case is the amount off the smallest allowed order: it must fit the category's cap, and a
+            # store-wide coupon may not be spent on categories whose cap is lower than that share.
+            share = 100 * amount / o.min_order_value
+            if share > rules.cap_pct(cat):
+                block(f"{_rs(amount)} off a {_rs(o.min_order_value)} order is {share:.0f}%, above the "
+                      f"{rules.cap_pct(cat):g}% limit for {catalog.labels.get(cat, cat) if cat != 'any' else 'the whole store'}.")
+                continue
+            if cat == "any":
+                excluded = [c for c in catalog.margins if rules.cap_pct(c) < share]
             liability = est_discount = amount
         elif o.type == "free_delivery":
             liability = est_discount = lim.delivery_fee_rs
         else:
             points = int(o.value)
+            if points <= 0:
+                block("Bonus points need at least 1 point.")
+                continue
             liability = est_discount = points * lim.point_value_rs
 
         if liability > budget_left:

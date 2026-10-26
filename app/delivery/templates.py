@@ -75,6 +75,12 @@ def welcome(store: str, tg_first: str) -> str:
             "Pick the kind of shopper you'd like to be:")
 
 
+def invite_only(store: str) -> str:
+    return (f"👋 <b>Welcome to {escape(store)}!</b>\n\n"
+            "To get your personal offers here, open the invite link the store sent you "
+            "(by SMS, email or in its app). It connects this chat to your account.")
+
+
 def profile_card(cust: dict, f: dict, seg_label: str, seg_description: str, category_labels: dict) -> str:
     cat = lambda k: category_labels.get(k, k)  # noqa: E731
     lines = [

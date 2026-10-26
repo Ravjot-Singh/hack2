@@ -34,5 +34,16 @@
   </main>
 </div>
 {% block scripts %}{% endblock %}
+<script>
+  // One click = one submit: stop double-clicks from sending an offer or launching a deal twice.
+  document.addEventListener("submit", function (e) {
+    if (e.defaultPrevented || e.target.method.toLowerCase() !== "post") return;
+    var buttons = e.target.querySelectorAll("button[type=submit], button:not([type])");
+    setTimeout(function () { buttons.forEach(function (b) { b.disabled = true; b.dataset.busy = "1"; }); }, 0);  // after the form data is taken
+  });
+  window.addEventListener("pageshow", function () {  // coming back with the Back button: usable again
+    document.querySelectorAll("button[data-busy]").forEach(function (b) { b.disabled = false; delete b.dataset.busy; });
+  });
+</script>
 </body>
 </html>

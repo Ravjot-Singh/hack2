@@ -121,14 +121,16 @@ def current_policy(slug: str, tenant_dir: Path | None = None) -> TenantPolicy:
         if cached:
             return cached[2]
         catalog, seg_yaml, config_version, version_id, rules_yaml = None, None, 0, None, None
-    key = (config_version, version_id)
+    folder = tenant_dir if tenant_dir is not None and tenant_dir.exists() else None
+    key = (config_version, version_id, str(folder))  # file rules (folder) and template defaults can differ
     if cached and cached[1] == key:
         policy = cached[2]
     else:
-        folder = tenant_dir if tenant_dir is not None and tenant_dir.exists() else None
         catalog = catalog or catalog_from_file((folder or TEMPLATE_DIR) / "catalog.yaml")
         seg_yaml = seg_yaml or ((folder or TEMPLATE_DIR) / "segments.yaml").read_text(encoding="utf-8")
-        file_rules = (yaml.safe_load((folder / "rules.yaml").read_text(encoding="utf-8"))
+        # File rules were written for the file catalog; the business may since have edited margins or uploaded
+        # its own categories, so fit them to the current catalog like any saved version.
+        file_rules = (adapt_rules(yaml.safe_load((folder / "rules.yaml").read_text(encoding="utf-8")), catalog)
                       if folder and (folder / "rules.yaml").exists() else default_rules(catalog))
         policy = None
         if rules_yaml is not None:
@@ -136,7 +138,12 @@ def current_policy(slug: str, tenant_dir: Path | None = None) -> TenantPolicy:
                 policy = build_policy(catalog, seg_yaml, yaml.safe_load(rules_yaml), version_id)
             except Exception as exc:  # a stored version that no longer validates: fall back
                 log.error("Saved rules version %s for %s is invalid, using defaults: %s", version_id, slug, exc)
-        policy = policy or build_policy(catalog, seg_yaml, copy.deepcopy(file_rules))
+        if policy is None:
+            try:
+                policy = build_policy(catalog, seg_yaml, copy.deepcopy(file_rules))
+            except Exception as exc:  # never take the business down: the template, fitted to its catalog
+                log.error("Rules file for %s does not fit its catalog, using the template: %s", slug, exc)
+                policy = build_policy(catalog, seg_yaml, default_rules(catalog))
     with _lock:
         _cache[slug] = (time.monotonic(), key, policy)
     return policy
