@@ -25,7 +25,11 @@ def load_dataset(conn: Connection, tenant_id: int, ds: Dataset, progress=print) 
     if conn.dialect.name == "postgresql":
         # Ids below are computed as max(id) + n, so two businesses importing at once must not interleave.
         conn.execute(text("select pg_advisory_xact_lock(424242)"))
-    # Customers are about to be replaced: drop their decisions/deals and unlink chats (users /start again).
+    # Chats linked now are re-linked after the reload (see _relink_chats), so testers stay connected.
+    linked = conn.execute(select(TelegramUser.id, Customer.external_ref, Customer.true_segment.is_not(None))
+                          .join(Customer, Customer.id == TelegramUser.customer_id)
+                          .where(TelegramUser.tenant_id == tenant_id)).all()
+    # Customers are about to be replaced: drop their decisions/deals and unlink chats for now.
     conn.execute(delete(OfferOutcome).where(OfferOutcome.tenant_id == tenant_id))
     conn.execute(delete(OfferDecision).where(OfferDecision.tenant_id == tenant_id))
     conn.execute(delete(Deal).where(Deal.tenant_id == tenant_id))
@@ -63,4 +67,33 @@ def load_dataset(conn: Connection, tenant_id: int, ds: Dataset, progress=print) 
             conn.execute(text(
                 f"select setval(pg_get_serial_sequence('{t}', 'id'), coalesce((select max(id) from {t}), 1))"
             ))
+    counts["relinked_chats"] = _relink_chats(conn, tenant_id, linked)
     return counts
+
+
+def _relink_chats(conn: Connection, tenant_id: int, linked: list) -> int:
+    """Keep every connected Telegram chat connected through a data reload (no /start again).
+
+    A chat goes back to the customer with the same customer id (external ref) when that customer is the same kind
+    as before: a demo shopper stays a demo shopper, a real customer (invite link) stays that real customer. A demo
+    chat whose ref no longer exists gets another free demo shopper. Real customers are never handed to a chat
+    that wasn't theirs."""
+    if not linked:
+        return 0
+    rows = conn.execute(select(Customer.id, Customer.external_ref, Customer.true_segment.is_not(None))
+                        .where(Customer.tenant_id == tenant_id).order_by(Customer.id)).all()
+    by_ref = {ref: (cid, synthetic) for cid, ref, synthetic in rows}
+    free_demo = [cid for cid, _, synthetic in rows if synthetic]
+    taken: set[int] = set()
+    relinked = 0
+    for chat_row_id, ref, was_synthetic in linked:
+        match = by_ref.get(ref)
+        cid = match[0] if match and match[1] == was_synthetic and match[0] not in taken else None
+        if cid is None and was_synthetic:
+            cid = next((c for c in free_demo if c not in taken), None)
+        if cid is None:
+            continue
+        taken.add(cid)
+        conn.execute(update(TelegramUser).where(TelegramUser.id == chat_row_id).values(customer_id=cid))
+        relinked += 1
+    return relinked

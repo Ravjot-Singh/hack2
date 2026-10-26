@@ -52,8 +52,10 @@ def main() -> None:
     print(f"\nLoading into {get_engine().dialect.name} ...")
     with get_engine().begin() as conn:
         tenant_id = conn.scalar(select(Tenant.id).where(Tenant.slug == args.tenant))
-        load_dataset(conn, tenant_id, ds)
+        counts = load_dataset(conn, tenant_id, ds)
     print(f"Loaded in {time.time() - t0:.1f}s")
+    if counts["relinked_chats"]:
+        print(f"Kept {counts['relinked_chats']} Telegram chat(s) connected (no /start needed).")
 
 
 if __name__ == "__main__":
