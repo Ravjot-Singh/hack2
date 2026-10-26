@@ -13,6 +13,8 @@ from telegram.error import TelegramError
 from app.db.models import OfferDecision
 from app.db.session import session_scope
 from app.delivery.push import push_offer, with_bot
+from app import preferences
+from app.learning import bandit
 from app.offers import service
 from app.offers.service import OfferResult
 from app.portal.auth import Business
@@ -39,7 +41,10 @@ def preview(biz: Business, customer_id: int, now: datetime, policy: TenantPolicy
         budget = service.budget_used_today(s, biz.tenant_id, now)
         opted_out = service.chat_opted_out(s, customer_id)
     ctx = CustomerContext(customer_id, f, f["segment"], opted_out, recent)
-    return f, evaluate(policy.rules, policy.catalog, ctx, budget, now, relax_frequency=True)
+    decision = evaluate(policy.rules, policy.catalog, ctx, budget, now, relax_frequency=True)
+    boosts = preferences.boosts(preferences.get(customer_id), decision.eligible)
+    decision.eligible = bandit.rank(policy, biz.tenant_id, decision.eligible, f, now, boosts)  # same pick as the send
+    return f, decision
 
 
 def only_offer(policy: TenantPolicy, offer_key: str) -> TenantPolicy | None:
@@ -162,6 +167,9 @@ async def deliver(running_bots: dict, biz: Business, result: OfferResult) -> dic
     if result.kind == "deferred":
         return {"kind": "ok", "title": f"Queued: {result.headline}",
                 "lines": [f"It's quiet hours, so it goes out on Telegram at {result.next_time:%d %b, %I:%M %p}."]}
+    if result.kind == "blocked":
+        return {"kind": "err", "title": "Stopped by a safety guardrail",
+                "lines": [(result.headline or "").removeprefix("Guardrail: ")]}
     reasons = {"opted_out": "This customer has turned offers off.",
                "too_soon": "This customer got an offer recently; the frequency limits don't allow another yet.",
                "none": "No offer passed the rules for this customer right now."}

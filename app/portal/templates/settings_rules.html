@@ -20,6 +20,10 @@ and the AI's choices, is checked against these before it's sent. Changes apply w
           <td>{{ num("limits.max_discount_rs_per_offer", lim.max_discount_rs_per_offer, suffix="₹") }}</td></tr>
       <tr><td>Daily budget for automatic offers<div class="desc">Most they can cost per day if every one is used. Deals have their own budget.</div></td>
           <td>{{ num("limits.daily_budget_rs", lim.daily_budget_rs, suffix="₹") }}</td></tr>
+      <tr><td>Maximum total spend per day<div class="desc">Safety ceiling over everything: automatic offers, deals and offers you send by hand. Empty = twice the daily budget.</div></td>
+          <td>{{ num("limits.max_total_spend_per_day_rs", lim.max_total_spend_per_day_rs if lim.max_total_spend_per_day_rs is not none else '', suffix="₹") }}</td></tr>
+      <tr><td>Offers per customer per day<div class="desc">Hard ceiling, even for offers you send by hand.</div></td>
+          <td>{{ num("limits.max_offers_per_customer_per_day", lim.max_offers_per_customer_per_day) }}</td></tr>
       <tr><td>Offers per customer per week<div class="desc">So customers don't feel spammed.</div></td>
           <td>{{ num("limits.max_offers_per_customer_per_week", lim.max_offers_per_customer_per_week) }}</td></tr>
       <tr><td>Hours between offers<div class="desc">Minimum gap between two offers to one customer.</div></td>
@@ -38,6 +42,13 @@ and the AI's choices, is checked against these before it's sent. Changes apply w
               <input type="time" name="quiet.end" value="{{ lim.quiet_hours.end[:5] }}"></td></tr>
       <tr><td>Control group<div class="desc">Share of customers held back from automatic offers and deals, so you can see what offers really add.</div></td>
           <td>{{ num("holdout_pct", data.measurement.holdout_pct, suffix="%") }}</td></tr>
+      <tr><td>How offers are picked<div class="desc">Among the offers your rules allow: let the engine learn from results which one pays off for each customer group, or always use the fixed ranking (priority, then expected value).</div></td>
+          <td><select name="learning.mode">
+            <option value="bandit" {{ 'selected' if data.get('learning', {}).get('mode') == 'bandit' }}>Learn from results</option>
+            <option value="rules" {{ 'selected' if data.get('learning', {}).get('mode', 'rules') == 'rules' }}>Fixed ranking</option>
+          </select></td></tr>
+      <tr><td>Fairness: lowest group share<div class="desc">Deals and campaigns rebalance so no city tier, gender, age band or new/long-time group gets offers at less than this share of the overall rate (when your rules allow it).</div></td>
+          <td>{{ num("fairness.min_ratio", (data.get('fairness', {}).get('min_ratio', 0.8) * 100)|round|int, suffix="%") }}</td></tr>
     </table></div>
   </div>
   <div class="card">

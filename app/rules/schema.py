@@ -63,16 +63,39 @@ class Limits(BaseModel):
     quiet_hours: QuietHours
     delivery_fee_rs: int = Field(default=40, ge=0)
     point_value_rs: float = Field(default=1.0, gt=0)
+    # Hard ceilings the guardrail harness enforces on every send, including hand-sent offers and deals.
+    max_offers_per_customer_per_day: int = Field(default=2, ge=1, le=20)
+    max_total_spend_per_day_rs: int | None = Field(default=None, ge=0)  # None = 2x the daily budget
+
+    @property
+    def total_spend_ceiling_rs(self) -> int:
+        return self.max_total_spend_per_day_rs if self.max_total_spend_per_day_rs is not None \
+            else 2 * self.daily_budget_rs
 
 
 class Measurement(BaseModel):
     holdout_pct: float = Field(default=10, ge=0, le=50)
 
 
+class Learning(BaseModel):
+    """bandit: the engine learns per customer group which allowed offer makes the most profit and picks it;
+    rules: always the rules' own ranking (priority, then expected value)."""
+    mode: Literal["rules", "bandit"] = "rules"
+
+
+class Fairness(BaseModel):
+    """Deals and campaigns rebalance their budget so no customer group (city tier, gender, age band, new vs
+    long-time) gets offers at less than min_ratio of the overall rate, as far as the rules allow."""
+    min_ratio: float = Field(default=0.8, ge=0, le=1)
+    min_group_size: int = Field(default=20, ge=1)
+
+
 class RulesConfig(BaseModel):
     limits: Limits
     offers: list[Offer]
     measurement: Measurement = Measurement()
+    learning: Learning = Learning()
+    fairness: Fairness = Fairness()
 
     def offer(self, key: str) -> Offer:
         return next(o for o in self.offers if o.key == key)

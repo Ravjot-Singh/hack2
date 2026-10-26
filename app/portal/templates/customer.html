@@ -16,6 +16,10 @@
     {% else %}<span class="badge">Not on Telegram</span>{% endif %}
   </div>
 </div>
+{% if tg.linked %}
+<p class="small muted">⚙️ Their preferences (set in Telegram with /preferences):
+  {{ prefs|join('; ') if prefs else 'none set, so all offers and any time.' }} Matching offers are favoured; your rules still decide.</p>
+{% endif %}
 {% if not tg.linked %}
 <p class="small muted">
   {% if invite %}Invite them to get offers on Telegram: send them this personal link (SMS, email, your app):

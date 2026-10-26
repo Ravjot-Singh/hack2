@@ -43,6 +43,12 @@ limits:
 measurement:
   holdout_pct: 10         # this % of customers never get offers, so we can measure what offers really add
 
+learning:
+  mode: bandit            # learn per customer group which allowed offer pays off (rules: fixed ranking)
+
+fairness:
+  min_ratio: 0.8          # no group (city tier, gender, age band, new vs long-time) below 80% of the overall offer rate
+
 # Offer fields:
 #   type             percent_off | flat_off | free_delivery | bonus_points
 #   value            10 = 10% (percent_off), Rs (flat_off), points (bonus_points); ignored for free_delivery

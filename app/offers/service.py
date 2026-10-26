@@ -14,6 +14,7 @@ from datetime import datetime, time, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import guardrails, preferences
 from app.agent.chooser import choose
 from app.agent.groq_client import JsonLLM, groq_json
 from app.db.models import Customer, CustomerFeature, OfferDecision, TelegramUser
@@ -21,6 +22,7 @@ from app.db.session import session_scope
 from app.delivery.templates import offer_message, rs
 from app.features.customer import _aware
 from app.features.store import refresh_features
+from app.learning import bandit
 from app.measurement.holdout import in_holdout
 from app.rules.engine import Candidate, CustomerContext, SentOffer, evaluate
 from app.rules.policy import TenantPolicy
@@ -209,9 +211,21 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
                 return OfferResult("too_soon", rec.id, next_time=_next_allowed(recent, policy, now))
             return OfferResult("none", rec.id)
 
+        # Bandit mode: the engine's learned order among the allowed offers (rules mode: the rules' own order).
+        prefs = preferences.get(customer_id)  # liked categories/types: a soft boost; quiet times: strict
+        ranked = bandit.rank(policy, tenant_id, decision.eligible, f, now, preferences.boosts(prefs, decision.eligible))
+        learned = policy.rules.learning.mode == "bandit"
+        own_quiet = preferences.quiet_until(prefs, now)
+        send_after = max(filter(None, (decision.send_after, own_quiet)), default=None)
+
+        biz_state = guardrails.business_state(s, tenant_id, now)
+        if biz_state.paused and trigger not in DIRECT_TRIGGERS:
+            return _blocked(s, rec, ranked[0], [guardrails.Violation(
+                "pause", "Automatic offers are paused for this business.")])
+
         if trigger not in DIRECT_TRIGGERS and in_holdout(tenant_slug, customer_id,
                                                          policy.rules.measurement.holdout_pct):
-            b = decision.best
+            b = ranked[0]
             rec.outcome, rec.offer_key, rec.headline, rec.category = "holdout", b.offer_key, b.headline, b.category
             rec.expected_net_rs, rec.valid_until = b.expected_net_rs, b.valid_until
             rec.block_reason = "Holdout group: no offer, used to measure what offers really add."
@@ -221,33 +235,53 @@ def request_offer(tenant_id: int, customer_id: int, policy: TenantPolicy, store:
 
         # AI picks from the rule-approved shortlist and writes the intro; the validator re-checks it, and the
         # rules' own top pick + template is used if the AI is off, over budget, failing or rejected.
+        # In bandit mode the learned pick is final and the AI only writes its intro.
         cust_name = s.get(Customer, customer_id).name
-        ictx = intro_context(cust_name, store, decision.best, f, policy)
-        choice = choose(policy, tenant_id, customer_id, store, voice, cust_name, f, decision.eligible, ictx, now, llm)
+        ictx = intro_context(cust_name, store, ranked[0], f, policy)
+        choice = choose(policy, tenant_id, customer_id, store, voice, cust_name, f,
+                        ranked[:1] if learned else decision.eligible, ictx, now, llm)
         c, intro = choice.candidate, choice.intro_html
-        s.add(rec)
         rec.ai_rejected_reason, rec.ai_reason = choice.ai_rejected_reason, choice.ai_reason
-        coupon = new_coupon(coupon_prefix)
         # A customer asking for an offer is not an interruption, so quiet hours don't apply on demand. They only
         # hold back a *message*: for customers not on Telegram the coupon is simply saved.
         reachable = user is not None and not user.opted_out
-        deferred = decision.send_after is not None and trigger != "on_demand" and reachable
-        valid_until = c.valid_until if deferred else now + (c.valid_until - (decision.send_after or now))
+        deferred = send_after is not None and trigger != "on_demand" and reachable
+        # Final, independent safety gate before a coupon exists.
+        cust_state = guardrails.customer_states(s, tenant_id, [customer_id], now)[customer_id]
+        cust_state.opted_out, cust_state.quiet = ctx.opted_out, prefs.quiet_hours
+        violations = guardrails.check(policy, c, trigger, cust_state, biz_state, now,
+                                      pushes_now=reachable and not deferred)
+        if violations:
+            return _blocked(s, rec, c, violations)
+        s.add(rec)
+        coupon = new_coupon(coupon_prefix)
+        valid_until = (send_after if deferred else now) + (c.valid_until - (decision.send_after or now))
         rec.outcome = "deferred" if deferred else "sent"
-        rec.send_after = decision.send_after if deferred else None
-        rec.offer_key, rec.chosen_by = c.offer_key, choice.chosen_by
+        rec.send_after = send_after if deferred else None
+        rec.offer_key, rec.chosen_by = c.offer_key, "bandit" if learned and len(ranked) > 1 else choice.chosen_by
         rec.headline, rec.terms = c.headline, c.terms
         rec.coupon_code = coupon
         rec.category, rec.percent, rec.amount_rs, rec.points = c.category, c.percent, c.amount_rs, c.points
         rec.min_order_value, rec.max_discount_rs = c.min_order_value, c.max_discount_rs
         rec.liability_rs, rec.expected_net_rs, rec.valid_until = c.liability_rs, c.expected_net_rs, valid_until
-        if not deferred and decision.send_after is not None:
+        if valid_until != c.valid_until:
             c.terms = c.terms.rsplit("valid till", 1)[0] + f"valid till {valid_until:%d %b, %I:%M %p}"
             rec.terms = c.terms
         rec.message = offer_message(intro, c, coupon)
         s.flush()
         return OfferResult("deferred" if deferred else "offer", rec.id, rec.message, next_time=rec.send_after,
                            chat_id=user.chat_id if reachable else None, coupon=coupon, headline=c.headline)
+
+
+def _blocked(s: Session, rec: OfferDecision, c: Candidate, violations: list) -> OfferResult:
+    """Record a decision the guardrail harness stopped: no coupon, nothing sent, reasons kept for the operator."""
+    rec.outcome, rec.offer_key, rec.headline, rec.category = "blocked", c.offer_key, c.headline, c.category
+    rec.expected_net_rs = c.expected_net_rs
+    rec.block_reason = guardrails.reason(violations)
+    rec.guardrail = [v.as_dict() for v in violations]
+    s.add(rec)
+    s.flush()
+    return OfferResult("blocked", rec.id, headline=rec.block_reason)
 
 
 def set_message_id(decision_id: int, message_id: int) -> None:

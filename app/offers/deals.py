@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from telegram.error import TelegramError
 
+from app import fairness, guardrails, preferences
 from app.agent.chooser import choose
 from app.agent.groq_client import JsonLLM, groq_json
 from app.db.models import Customer, CustomerFeature, Deal, OfferDecision, OfferOutcome, TelegramUser
@@ -201,6 +202,9 @@ class DealPlan:
     blocked: Counter = field(default_factory=Counter)
     budget_stopped: int = 0
     send_after: datetime | None = None
+    guard_blocked: list[tuple[PlanItem, list]] = field(default_factory=list)
+    ceiling_limited: bool = False
+    fairness: fairness.FairnessReport | None = None
 
     @property
     def liability(self) -> int:
@@ -223,7 +227,9 @@ class DealPlan:
                 "to_send": len(self.send), "on_telegram": self.on_telegram,
                 "coupons_only": len(self.send) - self.on_telegram, "holdout": len(self.holdout),
                 "budget_stopped": self.budget_stopped, "liability": self.liability,
-                "expected_net": round(self.expected_net), "blocked": dict(self.blocked.most_common())}
+                "expected_net": round(self.expected_net), "blocked": dict(self.blocked.most_common()),
+                "guard_blocked": len(self.guard_blocked), "ceiling_limited": self.ceiling_limited,
+                "fairness": self.fairness.as_dict() if self.fairness else None}
 
 
 def plan_deal(s: Session, tenant_id: int, slug: str, policy: TenantPolicy, spec: DealSpec, deal_id: int,
@@ -231,7 +237,8 @@ def plan_deal(s: Session, tenant_id: int, slug: str, policy: TenantPolicy, spec:
     lim = policy.rules.limits
     plan = DealPlan()
     q = (select(CustomerFeature, Customer.name, Customer.external_ref, Customer.true_segment,
-                Customer.price_sensitivity, TelegramUser.chat_id, TelegramUser.opted_out)
+                Customer.price_sensitivity, TelegramUser.chat_id, TelegramUser.opted_out,
+                Customer.city, Customer.city_tier, Customer.gender, Customer.age)
          .join(Customer, Customer.id == CustomerFeature.customer_id)
          .outerjoin(TelegramUser, TelegramUser.customer_id == CustomerFeature.customer_id)
          .where(CustomerFeature.tenant_id == tenant_id))
@@ -251,9 +258,13 @@ def plan_deal(s: Session, tenant_id: int, slug: str, policy: TenantPolicy, spec:
     cols = [c.name for c in CustomerFeature.__table__.columns]
     treated: list[PlanItem] = []
     held: list[PlanItem] = []
-    for feat, name, ref, true_seg, sens, chat_id, opted_out in rows:
+    members: dict[int, fairness.Member] = {}  # everyone outside the control group, for the fairness check
+    for feat, name, ref, true_seg, sens, chat_id, opted_out, city, city_tier, gender, age in rows:
         plan.audience += 1
         f = {c: getattr(feat, c) for c in cols}
+        if not in_holdout(slug, f["customer_id"], policy.rules.measurement.holdout_pct):
+            members[f["customer_id"]] = fairness.Member(
+                f["customer_id"], fairness.attributes(city, city_tier, gender, age, f.get("tenure_days")))
         offer, reason = personalise(spec, deal_id, f, policy)
         if offer is None:
             plan.blocked[reason] += 1
@@ -268,16 +279,66 @@ def plan_deal(s: Session, tenant_id: int, slug: str, policy: TenantPolicy, spec:
         item = PlanItem(f["customer_id"], name, ref, f["segment"], chat_id, bool(opted_out), true_seg, sens, f, d.best)
         (held if in_holdout(slug, f["customer_id"], policy.rules.measurement.holdout_pct) else treated).append(item)
 
-    budget_left = spec.budget_rs
-    cutoff = float("inf")
+    # The guardrail harness re-checks every offer the budget would fund (money, contact, pause); the deal
+    # budget may also never push today's total spend past the business's daily ceiling.
+    biz_state = guardrails.business_state(s, tenant_id, now)
+    states = guardrails.customer_states(s, tenant_id, [i.customer_id for i in treated], now)
+    budget_left = min(spec.budget_rs, max(0, lim.total_spend_ceiling_rs - biz_state.spend_today))
+    plan.ceiling_limited = budget_left < spec.budget_rs
+
+    prefs = preferences.load([i.customer_id for i in treated])
+
+    def guard(item: PlanItem, budget: float) -> list:
+        cust = states[item.customer_id]
+        p = prefs.get(item.customer_id)
+        cust.opted_out, cust.quiet = item.opted_out, p.quiet_hours if p else None
+        waits = plan.send_after is not None or preferences.quiet_until(p, now) is not None  # queued, not pushed
+        return guardrails.check(policy, item.candidate, "deal", cust, biz_state, now,
+                                pushes_now=bool(item.chat_id) and not item.opted_out and not waits,
+                                budget_left=budget)
+
+    unfunded: list[PlanItem] = []
     for item in sorted(treated, key=lambda i: -i.candidate.expected_net_rs):
         if item.candidate.liability_rs > budget_left:
-            plan.budget_stopped += 1
+            unfunded.append(item)
             continue
+        violations = guard(item, budget_left)
+        if violations:
+            plan.guard_blocked.append((item, violations))
+            plan.blocked["Stopped by a safety guardrail: " + violations[0].text.rstrip(".")] += 1
+            continue
+        guardrails.record_issue(biz_state, states[item.customer_id], item.candidate)
         budget_left -= item.candidate.liability_rs
-        cutoff = min(cutoff, item.candidate.expected_net_rs)
         plan.send.append(item)
+
+    # Fairness: rebalance the same budget so no customer group is left far behind (as far as the rules allow).
+    for item in treated:
+        m = members[item.customer_id]
+        m.candidate, m.share, m.payload = item.candidate, fairness.discount_share(policy, item.candidate, item.f), item
+
+    def accept(m: fairness.Member) -> bool:
+        violations = guard(m.payload, float("inf"))  # the deal budget is enforced by the rebalancer itself
+        if violations:
+            plan.guard_blocked.append((m.payload, violations))
+        return not violations
+
+    def dropped(m: fairness.Member) -> None:
+        cust = states[m.key]
+        biz_state.spend_today -= m.candidate.liability_rs
+        cust.offers_today -= 1
+        cust.live_offer_keys.discard(m.candidate.offer_key)
+
+    funded, plan.fairness = fairness.rebalance(
+        list(members.values()), [members[i.customer_id] for i in plan.send],
+        [members[i.customer_id] for i in unfunded], budget_left, policy.rules.fairness.min_ratio,
+        policy.rules.fairness.min_group_size, accept=accept, on_drop=dropped,
+        on_add=lambda m: guardrails.record_issue(biz_state, states[m.key], m.candidate))
+    plan.send = sorted((m.payload for m in funded), key=lambda i: -i.candidate.expected_net_rs)
+    sent_ids = {i.customer_id for i in plan.send}
+    blocked_ids = {i.customer_id for i, _ in plan.guard_blocked}
+    plan.budget_stopped = sum(1 for i in treated if i.customer_id not in sent_ids | blocked_ids)
     # Control group matched to the customers the budget actually reached.
+    cutoff = min((i.candidate.expected_net_rs for i in plan.send), default=float("inf"))
     plan.holdout = [i for i in held if i.candidate.expected_net_rs >= cutoff]
     return plan
 
@@ -294,10 +355,14 @@ def execute_deal(deal_id: int, tenant_id: int, slug: str, store: str, prefix: st
         lim = policy.rules.limits
         pushes: list[tuple[OfferDecision, int]] = []
         records: list[tuple[OfferDecision, PlanItem, bool]] = []
+        prefs = preferences.load([i.customer_id for i in plan.send])
         for item in plan.send:
             c = item.candidate
             reachable = bool(item.chat_id) and not item.opted_out
-            deferred = plan.send_after is not None and reachable
+            # Store quiet hours, or the customer's own quiet times: the message waits, the coupon exists now.
+            send_after = max(filter(None, (plan.send_after, preferences.quiet_until(prefs.get(item.customer_id), now))),
+                             default=None)
+            deferred = send_after is not None and reachable
             first = item.name.split()[0]
             intro, chosen_by, ai_reason, ai_rejected = deal_intro(spec.name, first), "rules", None, None
             if reachable:  # the AI writes intros only for real people on Telegram (free-tier friendly)
@@ -308,7 +373,7 @@ def execute_deal(deal_id: int, tenant_id: int, slug: str, store: str, prefix: st
                     intro, chosen_by, ai_reason = choice.intro_html, "ai", choice.ai_reason
                 ai_rejected = choice.ai_rejected_reason
             coupon = new_coupon(prefix)
-            valid_until = (plan.send_after if deferred else now) + timedelta(hours=spec.valid_hours)
+            valid_until = (send_after if deferred else now) + timedelta(hours=spec.valid_hours)
             rec = OfferDecision(
                 tenant_id=tenant_id, customer_id=item.customer_id, created_at=now, trigger="deal", deal_id=deal_id,
                 segment=item.segment, outcome="deferred" if deferred else "sent", shortlist=[c.offer_key],
@@ -316,7 +381,7 @@ def execute_deal(deal_id: int, tenant_id: int, slug: str, store: str, prefix: st
                 headline=c.headline, terms=c.terms.rsplit("valid till", 1)[0] + f"valid till {valid_until:%d %b, %I:%M %p}",
                 coupon_code=coupon, category=c.category, percent=c.percent, amount_rs=c.amount_rs, points=c.points,
                 min_order_value=c.min_order_value, max_discount_rs=c.max_discount_rs, liability_rs=c.liability_rs,
-                expected_net_rs=c.expected_net_rs, send_after=plan.send_after if deferred else None,
+                expected_net_rs=c.expected_net_rs, send_after=send_after if deferred else None,
                 valid_until=valid_until)
             c.terms = rec.terms
             rec.message = offer_message(intro, c, coupon)
@@ -334,6 +399,13 @@ def execute_deal(deal_id: int, tenant_id: int, slug: str, store: str, prefix: st
                 block_reason="Control group: held back on purpose to measure what the deal adds.")
             s.add(rec)
             records.append((rec, item, False))
+        for item, violations in plan.guard_blocked:  # kept for the operator's Guardrails page; nothing issued
+            c = item.candidate
+            s.add(OfferDecision(
+                tenant_id=tenant_id, customer_id=item.customer_id, created_at=now, trigger="deal", deal_id=deal_id,
+                segment=item.segment, outcome="blocked", shortlist=[c.offer_key], offer_key=c.offer_key,
+                headline=c.headline, category=c.category, liability_rs=0, expected_net_rs=c.expected_net_rs,
+                block_reason=guardrails.reason(violations), guardrail=[v.as_dict() for v in violations]))
         s.flush()
         # Demo-data customers (not real Telegram users) get a simulated response, so results can be shown.
         for rec, item, sent in records:

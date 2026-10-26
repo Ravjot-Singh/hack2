@@ -124,6 +124,28 @@ every AI choice before anything is sent.
   `--proxy-headers --forwarded-allow-ips='*'` so the real address is used); every response sends
   X-Frame-Options DENY / `frame-ancestors 'none'`; coupon CSV cells starting with = + - @ are prefixed with '.
 
+- Guardrail harness (`app/guardrails.py`): one pure `check()` re-run on the final offer before any coupon exists,
+  at all three issuing sites (`service.request_offer`, `deals.plan_deal`/`execute_deal`, `campaign`): money (cap ≤
+  margin on the resolved category, store-wide must exclude lower-cap categories, per-offer max, daily budget or deal
+  budget, `limits.max_total_spend_per_day_rs` ceiling = 2× daily budget by default), contact (opt-out, store and
+  personal quiet hours, `limits.max_offers_per_customer_per_day` = 2 even for operator sends, no second live coupon
+  of the same offer), pause (`tenants.paused`: stops campaign/deal/event, not operator/on-demand). Violations →
+  decision outcome `blocked` + `guardrail` JSON; portal `/app/guardrails` (pause switch, limits, blocks, fairness).
+- Learning (`app/learning/bandit.py`, `learning.mode: bandit|rules`, ShopKart = bandit): Thompson sampling inside
+  the rules' shortlist; score = engine's per-customer purchase estimate × Gamma-sampled correction per (segment,
+  offer) learned from outcomes/claims × profit if bought. In bandit mode the AI only writes the intro (chosen_by
+  `bandit`). Seeded per customer/day so preview = send. `scripts/compare_policies.py` scores rules vs bandit on
+  the simulator's TRUE expected gain (`outcomes.expected_gain`) over several worlds: ~+2%, better in 3/3 (single
+  measured runs swing ±₹30k from luck, so never compare policies on one simulated draw).
+- Fairness (`app/fairness.py`, `fairness.min_ratio` 0.8, `min_group_size` 20): groups city tier
+  (`app/data/city_tiers.py`), gender, age band, tenure; offer-rate and generosity ratios vs overall. Deals and
+  campaigns rebalance the same budget (swap least valuable funded offers of other groups for the best allowed
+  unfunded ones in the under-served group, never pushing a donor group below the line); shortfalls shown as
+  "limited by rules". Traits never decide eligibility. Report in deal progress, deal page, Guardrails page.
+- Preferences (`app/preferences.py`, `customer_preferences`): `/preferences` buttons in Telegram (categories,
+  offer types, quiet presets); categories/types boost ranking (×1.3 bandit, +1 priority rules mode), quiet presets
+  delay messages (service + deals) and the guard enforces them; shown read-only on the portal customer page.
+
 ## Commands
 ```
 pip install -r requirements.txt

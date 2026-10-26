@@ -20,6 +20,7 @@ from app.config import get_settings
 from app.dashboard.routes import STATIC_DIR, router as dashboard_router
 from app.portal.data_routes import router as portal_data_router
 from app.portal.deals_routes import router as portal_deals_router
+from app.portal.guardrails_routes import router as portal_guardrails_router
 from app.portal.routes import router as portal_router
 from app.portal.routes import templates as portal_templates
 from app.portal.settings_routes import router as portal_settings_router
@@ -80,6 +81,7 @@ app.include_router(portal_router)
 app.include_router(portal_deals_router)
 app.include_router(portal_data_router)
 app.include_router(portal_settings_router)
+app.include_router(portal_guardrails_router)
 
 
 ERROR_TEXT = {

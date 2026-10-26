@@ -127,6 +127,7 @@ HELP = (
     "<b>What I can do</b>\n"
     "/offers – get your personalised offer\n"
     "/profile – see your synthetic shopper profile\n"
+    "/preferences – choose the offers you like and when we may message you\n"
     "/switch – become a different kind of shopper\n"
     "/stop – pause offers · /resume – turn them back on\n"
     "/help – this message\n\n"

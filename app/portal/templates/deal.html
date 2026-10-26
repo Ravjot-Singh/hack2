@@ -28,6 +28,8 @@
     <div class="card tile"><div class="label">Control group</div><div class="value">{{ "{:,}".format(preview.holdout) }}</div>
       <div class="note">similar customers held back on purpose, to measure what the deal adds</div></div>
   </div>
+  {% if paused %}<div class="flash err section">Automatic offers are paused for your business, so this deal can't be launched. Resume them on the <a href="/app/guardrails">Guardrails</a> page.</div>{% endif %}
+  {% if preview.ceiling_limited %}<div class="flash err section">Today's total spend ceiling leaves less than this deal's budget, so fewer customers get it. Raise "Maximum total spend per day" in your offer rules or launch tomorrow.</div>{% endif %}
   {% if preview.send_after %}<div class="flash ok section">It's quiet hours now: Telegram messages will go out at {{ preview.send_after|dt }}. Coupons are saved straight away.</div>{% endif %}
   <div class="grid g2 section">
     <div class="card">
@@ -50,9 +52,10 @@
       {% else %}<p class="muted">Everyone in the chosen groups qualifies.</p>{% endif %}
     </div>
   </div>
+  {% with fr = preview.fairness %}{% include "_fairness.html" %}{% endwith %}
   <div class="section" style="display: flex; gap: 8px; flex-wrap: wrap">
     <form method="post" action="/app/deals/{{ deal.id }}/launch" onsubmit="return confirm('Send this deal to {{ preview.to_send }} customers now?')">
-      <button type="submit" {{ 'disabled' if not preview.to_send }}>Launch deal</button></form>
+      <button type="submit" {{ 'disabled' if not preview.to_send or paused }}>Launch deal</button></form>
     <a class="btn" style="background: var(--surface-2); color: var(--ink)" href="/app/deals/{{ deal.id }}/edit">Edit</a>
     <form method="post" action="/app/deals/{{ deal.id }}/delete" onsubmit="return confirm('Delete this draft?')"><button class="secondary" type="submit">Delete draft</button></form>
   </div>
@@ -87,6 +90,7 @@
       {% if p.budget_stopped %}<tr><td>Budget ran out (lower-value customers)</td><td class="num">{{ "{:,}".format(p.budget_stopped) }}</td></tr>{% endif %}</table>
   </div>
   {% endif %}
+  {% with fr = p.get('fairness') %}{% include "_fairness.html" %}{% endwith %}
   {% if deal.status != 'sending' %}
   <p class="section"><a class="btn" href="/app/deals/{{ deal.id }}/coupons.csv">Download coupons (CSV)</a>
     <span class="small muted">for customers you'll reach by email, SMS or your app</span></p>

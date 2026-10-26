@@ -14,6 +14,7 @@ from sqlalchemy import case, func, select, update
 from app.dashboard import queries
 from app.db.models import Customer, Deal, OfferDecision, TelegramUser
 from app.db.session import get_engine, session_scope
+from app.learning import bandit
 from app.measurement.metrics import measure
 from app.offers import deals as deal_engine
 from app.offers.deals import APPLIES, TYPES, DealSpec
@@ -150,13 +151,17 @@ def deal_page(request: Request, deal_id: int, biz: Business = Depends(current_bu
         with get_engine().connect() as conn:
             report = measure(conn, biz.tenant_id, deal_id=deal_id)
     return base.page(request, "deal.html", biz, "deals", deal=deal, spec=spec, preview=preview, sample=sample,
-                     stats=stats, report=report, types=TYPES, applies=APPLIES, **base._labels(biz))
+                     stats=stats, report=report, types=TYPES, applies=APPLIES, paused=base.is_paused(biz),
+                     min_ratio=policy.rules.fairness.min_ratio,
+                     **base._labels(biz))
 
 
 def _mark_sending(biz: Business, deal_id: int) -> None:
     """Draft -> sending in one conditional UPDATE, so two clicks (or two tabs) can never launch a deal twice."""
     with session_scope() as s:
         _deal_or_404(s, biz, deal_id)
+    if base.is_paused(biz):
+        raise HTTPException(400, "Automatic offers are paused for your business. Resume them on the Guardrails page.")
     now = base._now()
     with session_scope() as s:
         changed = s.execute(update(Deal).where(Deal.id == deal_id, Deal.tenant_id == biz.tenant_id,
@@ -222,8 +227,10 @@ def results(request: Request, biz: Business = Depends(current_business)):
             row["report"] = measure(conn, biz.tenant_id, deal_id=row["id"]).overall
             row["claimed"] = claims.get(row["id"], 0)
     simulated = any(r["progress"].get("simulated") for r in deal_rows)
+    policy = biz.policy
+    learning = [r for r in bandit.summary(policy, biz.tenant_id) if r["trials"] >= 10]
     return base.page(request, "results.html", biz, "results", report=report, deals=deal_rows, simulated=simulated,
-                     **base._labels(biz))
+                     learning=learning, learning_on=policy.rules.learning.mode == "bandit", **base._labels(biz))
 
 
 # ---- activity ----

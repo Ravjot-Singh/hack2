@@ -33,6 +33,8 @@ class Tenant(Base):
     catalog: Mapped[dict | None] = mapped_column(JSON)  # {category: {"label": str, "margin_pct": float}}
     segments_yaml: Mapped[str | None] = mapped_column(Text)
     config_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # bump on edits
+    # Kill switch: no automatic offers (campaigns, deals, events) while paused; hand-sent and asked-for still work.
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class Account(Base):
@@ -285,6 +287,21 @@ class OfferDecision(Base):
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
     response: Mapped[str | None] = mapped_column(String(12))  # claimed | dismissed
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    guardrail: Mapped[list | None] = mapped_column(JSON)  # violations found by the final safety gate (outcome blocked)
+
+
+class CustomerPreference(Base):
+    """What a customer told the bot they like (/preferences). Categories and offer types only boost ranking;
+    quiet times delay messages like the store's quiet hours."""
+
+    __tablename__ = "customer_preferences"
+
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    offer_types: Mapped[list] = mapped_column(JSON, default=list)
+    quiet: Mapped[str | None] = mapped_column(String(20))  # preset key, e.g. "evenings"
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class OfferOutcome(Base):

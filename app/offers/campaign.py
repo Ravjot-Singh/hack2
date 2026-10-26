@@ -22,9 +22,11 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import fairness, guardrails
 from app.db.models import Customer, CustomerFeature, OfferDecision, OfferOutcome, TelegramUser
 from app.delivery.templates import offer_message, template_intro
 from app.features.customer import _aware
+from app.learning import bandit
 from app.measurement.holdout import in_holdout
 from app.measurement.outcomes import simulate
 from app.offers.service import intro_context, new_coupon
@@ -39,8 +41,10 @@ class CampaignResult:
     sent: int = 0
     holdout: int = 0
     budget_stopped: int = 0
+    guard_blocked: int = 0
     liability: int = 0
     by_offer: Counter = field(default_factory=Counter)
+    fairness: object = None  # fairness.FairnessReport
 
 
 def _margin(policy: TenantPolicy, c: Candidate, f: dict) -> float:
@@ -62,7 +66,8 @@ def run_simulated_campaign(s: Session, tenant_slug: str, tenant_id: int, policy:
     res = CampaignResult()
 
     linked = select(TelegramUser.customer_id).where(TelegramUser.customer_id.is_not(None))
-    q = (select(CustomerFeature, Customer.name, Customer.true_segment, Customer.price_sensitivity)
+    q = (select(CustomerFeature, Customer.name, Customer.true_segment, Customer.price_sensitivity,
+                Customer.city, Customer.city_tier, Customer.gender, Customer.age)
          .join(Customer, Customer.id == CustomerFeature.customer_id)
          .where(CustomerFeature.tenant_id == tenant_id, CustomerFeature.customer_id.not_in(linked)))
     if segment:
@@ -83,35 +88,75 @@ def run_simulated_campaign(s: Session, tenant_slug: str, tenant_id: int, policy:
 
     cols = [c.name for c in CustomerFeature.__table__.columns]
     treated, held = [], []
-    for feat, name, true_seg, sens in rows:
+    stats = bandit.load_stats(tenant_id, policy, fresh=True) if policy.rules.learning.mode == "bandit" else None
+    members: dict[int, fairness.Member] = {}  # everyone outside the control group, for the fairness check
+    for feat, name, true_seg, sens, city, city_tier, gender, age in rows:
         f = {c: getattr(feat, c) for c in cols}
         res.considered += 1
+        if not in_holdout(tenant_slug, f["customer_id"], policy.rules.measurement.holdout_pct):
+            members[f["customer_id"]] = fairness.Member(
+                f["customer_id"], fairness.attributes(city, city_tier, gender, age, f.get("tenure_days")))
         # Budget is allocated below, so evaluate as if none were used yet.
         d = evaluate(policy.rules, policy.catalog, CustomerContext(f["customer_id"], f, f["segment"], False,
                                                                    history[f["customer_id"]]),
                      min(0, lim.daily_budget_rs - (daily_budget or lim.daily_budget_rs)), now)
         if not d.eligible:
             continue
+        d.eligible = bandit.rank(policy, tenant_id, d.eligible, f, now, stats=stats)  # learned order (bandit mode)
         res.eligible += 1
         item = (f, name, true_seg, sens, d)
         (held if in_holdout(tenant_slug, f["customer_id"], policy.rules.measurement.holdout_pct) else treated).append(item)
 
     budget_left = lim.daily_budget_rs if daily_budget is None else daily_budget
     records: list[tuple[OfferDecision, dict, str, float, Candidate | None, Candidate]] = []
-    cutoff = float("inf")
-    for f, name, true_seg, sens, d in sorted(treated, key=lambda x: -x[4].best.expected_net_rs):
+    # Guardrail harness on simulated history (simulations never touch live money, so only caps/contact/pause).
+    biz_state = guardrails.business_state(s, tenant_id, now, simulated=True)
+    states = guardrails.customer_states(s, tenant_id, [x[0]["customer_id"] for x in treated], now, simulated=True)
+    funded: list[fairness.Member] = []
+    unfunded: list[fairness.Member] = []
+    for item in sorted(treated, key=lambda x: -x[4].best.expected_net_rs):
+        f, d = item[0], item[4]
+        m = members[f["customer_id"]]
+        m.payload = item
         chosen = next((c for c in d.eligible if c.liability_rs <= budget_left), None)
         if chosen is None:
-            res.budget_stopped += 1
+            m.candidate, m.share = d.best, fairness.discount_share(policy, d.best, f)
+            unfunded.append(m)
             continue
+        violations = guardrails.check(policy, chosen, "campaign", states[f["customer_id"]], biz_state, now,
+                                      pushes_now=False, simulated=True)
+        if violations:
+            res.guard_blocked += 1
+            continue
+        guardrails.record_issue(biz_state, states[f["customer_id"]], chosen)
+        budget_left -= chosen.liability_rs
+        m.candidate, m.share = chosen, fairness.discount_share(policy, chosen, f)
+        funded.append(m)
+
+    def accept(m: fairness.Member) -> bool:
+        ok = not guardrails.check(policy, m.candidate, "campaign", states[m.key], biz_state, now,
+                                  pushes_now=False, simulated=True)
+        res.guard_blocked += not ok
+        return ok
+
+    funded, res.fairness = fairness.rebalance(
+        list(members.values()), funded, unfunded, budget_left, policy.rules.fairness.min_ratio,
+        policy.rules.fairness.min_group_size, accept=accept,
+        on_add=lambda m: guardrails.record_issue(biz_state, states[m.key], m.candidate))
+    res.budget_stopped = len(treated) - len(funded) - res.guard_blocked
+
+    cutoff = float("inf")
+    for m in sorted(funded, key=lambda m: -m.payload[4].best.expected_net_rs):
+        f, name, true_seg, sens, d = m.payload
+        chosen = m.candidate
         cutoff = min(cutoff, d.best.expected_net_rs)
         rec = OfferDecision(tenant_id=tenant_id, customer_id=f["customer_id"], created_at=now, trigger="campaign",
                             simulated=True, segment=f["segment"], shortlist=[c.offer_key for c in d.eligible],
                             outcome="no_offer", liability_rs=0)
-        budget_left -= chosen.liability_rs
         coupon = new_coupon(coupon_prefix)
         intro = template_intro(chosen, intro_context(name, store, chosen, f, policy))
-        rec.outcome, rec.offer_key, rec.chosen_by = "sent", chosen.offer_key, "rules"
+        rec.outcome, rec.offer_key = "sent", chosen.offer_key
+        rec.chosen_by = "bandit" if stats is not None and len(d.eligible) > 1 else "rules"
         rec.headline, rec.terms, rec.coupon_code = chosen.headline, chosen.terms, coupon
         rec.category, rec.percent, rec.amount_rs, rec.points = chosen.category, chosen.percent, chosen.amount_rs, chosen.points
         rec.min_order_value, rec.max_discount_rs = chosen.min_order_value, chosen.max_discount_rs

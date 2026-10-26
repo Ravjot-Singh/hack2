@@ -18,9 +18,13 @@ def rules_form_data(form, base: dict) -> dict:
     data = copy.deepcopy(base)
     lim = data["limits"]
     for key in ("max_discount_rs_per_offer", "max_offers_per_customer_per_week", "min_hours_between_offers",
-                "same_offer_cooldown_days", "daily_budget_rs", "min_expected_net_rs", "delivery_fee_rs"):
+                "same_offer_cooldown_days", "daily_budget_rs", "min_expected_net_rs", "delivery_fee_rs",
+                "max_offers_per_customer_per_day"):
         if form.get(f"limits.{key}") not in (None, ""):
             lim[key] = int(float(form.get(f"limits.{key}")))
+    if "limits.max_total_spend_per_day_rs" in form:  # empty = automatic (twice the daily budget)
+        raw = form.get("limits.max_total_spend_per_day_rs")
+        lim["max_total_spend_per_day_rs"] = int(float(raw)) if raw not in (None, "") else None
     for key in ("max_buy_anyway_prob_for_discounts", "max_return_rate_for_discounts"):
         if form.get(f"limits.{key}") not in (None, ""):
             lim[key] = float(form.get(f"limits.{key}")) / 100
@@ -31,6 +35,10 @@ def rules_form_data(form, base: dict) -> dict:
                           "end": form.get("quiet.end") or lim["quiet_hours"]["end"]}
     if form.get("holdout_pct") not in (None, ""):
         data["measurement"]["holdout_pct"] = float(form.get("holdout_pct"))
+    if form.get("learning.mode") in ("rules", "bandit"):
+        data.setdefault("learning", {})["mode"] = form.get("learning.mode")
+    if form.get("fairness.min_ratio") not in (None, ""):
+        data.setdefault("fairness", {})["min_ratio"] = float(form.get("fairness.min_ratio")) / 100
     for o in data["offers"]:
         k = o["key"]
         o["enabled"] = form.get(f"offer.{k}.enabled") == "on"

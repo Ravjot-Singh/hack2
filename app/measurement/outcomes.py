@@ -65,6 +65,40 @@ def discount_for(offer_type: str, percent, amount_rs, max_discount_rs, points, o
     return int((points or 0) * point_value)
 
 
+def _p_buy(features: dict, true_segment: str, price_sensitivity: float, window_hours: float, offer: dict | None,
+           est_order: float) -> float:
+    base = 1 - (1 - features.get("buy_anyway_prob", 0.0)) ** (window_hours / (14 * 24))
+    if not offer:
+        return base
+    strength = offer_strength(offer["type"], offer.get("percent"), offer.get("amount_rs"), offer.get("points"),
+                              est_order, offer.get("max_discount_rs"))
+    if (offer.get("min_order_value") or 0) > 1.5 * est_order:
+        strength *= 0.5
+    lift = (strength * (0.4 + 1.2 * price_sensitivity) * PERSONA_RESPONSE.get(true_segment, 1.0)
+            + RELEVANCE.get(offer["key"], 0.0))
+    return 1 - (1 - base) * (1 - min(lift, 0.9))
+
+
+def expected_gain(*, features: dict, true_segment: str, price_sensitivity: float, window_hours: float, offer: dict,
+                  margin_pct: float, delivery_fee: int, point_value: float) -> float:
+    """True expected extra profit of sending this offer instead of nothing (no randomness): what an
+    evaluation should compare, since a single simulated draw is dominated by luck at these sample sizes."""
+    est_order = float(features.get("aov") or 900)
+    if features.get("last_abandoned_cart_value") and offer["key"] == "cart_recovery":
+        est_order = float(features["last_abandoned_cart_value"])
+    min_order = offer.get("min_order_value") or 0
+
+    def profit(value: float) -> float:
+        cost = discount_for(offer["type"], offer.get("percent"), offer.get("amount_rs"), offer.get("max_discount_rs"),
+                            offer.get("points"), value, delivery_fee, point_value) if value >= min_order else 0
+        return value * margin_pct / 100 - REDEEM_IF_BOUGHT * cost
+
+    with_offer = profit(est_order) if est_order >= min_order else 0.5 * profit(min_order) + 0.5 * profit(est_order)
+    p_offer = _p_buy(features, true_segment, price_sensitivity, window_hours, offer, est_order)
+    p_none = _p_buy(features, true_segment, price_sensitivity, window_hours, None, est_order)
+    return p_offer * with_offer - p_none * est_order * margin_pct / 100
+
+
 def simulate(rng: random.Random, *, features: dict, true_segment: str, price_sensitivity: float,
              window_hours: float, offer: dict | None, margin_pct: float, delivery_fee: int,
              point_value: float) -> SimOutcome:

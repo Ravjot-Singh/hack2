@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Guardrails{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Guardrails</h1>
+    <p>A last safety check on every offer before a coupon exists, whoever chose it (your rules, the learning engine,
+      the AI, you, or a deal). Anything that breaks a hard limit is stopped and listed here.</p></div>
+</div>
+
+<div class="grid cust-grid">
+  <div class="card">
+    <h2>{{ '⏸ Automatic offers are paused' if paused else '▶ Automatic offers are running' }}</h2>
+    <p class="small">Pausing stops campaigns, deals and event offers (abandoned carts, birthdays, expiring points)
+      straight away. Offers you send by hand and offers customers ask for in Telegram still work.</p>
+    <form method="post" action="/app/guardrails/pause">
+      <input type="hidden" name="paused" value="{{ 'off' if paused else 'on' }}">
+      <button type="submit" class="{{ '' if paused else 'secondary' }}">{{ 'Resume automatic offers' if paused else 'Pause all automatic offers' }}</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Hard limits today</h2>
+    <dl class="kv small">
+      <dt>Spent today (most it can cost)</dt><dd>{{ spend|rs }} of {{ ceiling|rs }} ceiling</dd>
+      <dt>Daily offer budget</dt><dd>{{ daily_budget|rs }}</dd>
+      <dt>Most one offer can be worth</dt><dd>{{ max_per_offer|rs }}</dd>
+      <dt>Offers per customer per day</dt><dd>at most {{ per_day }}, even sent by hand</dd>
+    </dl>
+    <div class="meter" aria-label="Share of today's spend ceiling used"><div style="width: {{ [100, (100 * spend / ceiling) if ceiling else 100]|min|round }}%"></div></div>
+    <p class="small muted">Change these in <a href="/app/settings/rules">Offer rules</a>.</p>
+  </div>
+</div>
+
+<div class="card section">
+  <h2>Stopped today: {{ blocked_today }}</h2>
+  {% if by_code %}<p class="small">{% for label, n in by_code %}{{ label }}: <b>{{ n }}</b>{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+  {% if feed %}{% include "_feed.html" %}{% else %}<p class="muted">Nothing has been stopped. Every offer stayed within your limits.</p>{% endif %}
+</div>
+
+<div class="card section">
+  <h2>Fairness of recent deals</h2>
+  <p class="small">No group (city size, gender, age, new vs long-time customers) should get offers at less than
+    {{ (min_ratio * 100)|round|int }}% of the overall rate. Deals rebalance their budget automatically; gaps left are
+    groups where too few customers pass your rules.</p>
+  {% if fairness %}
+  <table>
+    <tr><th>Deal</th><th class="num">Added for fairness</th><th>Remaining gaps</th></tr>
+    {% for d in fairness %}{% set gaps = d.fairness.rows|selectattr('status', 'equalto', 'limited')|list %}
+    <tr><td><a href="/app/deals/{{ d.id }}">{{ d.name }}</a></td><td class="num">{{ d.fairness.added }}</td>
+      <td>{% if gaps %}{% for g in gaps %}{{ g.group }} ({{ '%.2f'|format(g.rate_ratio) }}){% if not loop.last %}, {% endif %}{% endfor %}{% else %}<span class="badge sent">None</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No deals launched yet.</p>{% endif %}
+</div>
+{% endblock %}

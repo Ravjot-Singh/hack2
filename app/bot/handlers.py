@@ -13,6 +13,7 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from app.data.generator import IST
+from app import preferences
 from app.delivery import templates
 from app.delivery.push import offer_keyboard
 from app.offers import service
@@ -25,6 +26,7 @@ log = logging.getLogger(__name__)
 COMMANDS = [
     BotCommand("offers", "Get your personalised offer"),
     BotCommand("profile", "See your shopper profile"),
+    BotCommand("preferences", "Choose what offers you like"),
     BotCommand("switch", "Become a different kind of shopper"),
     BotCommand("stop", "Pause offers"),
     BotCommand("resume", "Turn offers back on"),
@@ -76,6 +78,9 @@ async def _send_profile(update: Update, bc: BotContext, customer_id: int, edit: 
     cust, f = await asyncio.to_thread(service.load_profile, bc.tenant_id, customer_id, bc.policy, _now())
     seg = next(s for s in bc.policy.segments.segments if s.key == f["segment"])
     text = templates.profile_card(cust, f, seg.label, seg.description, bc.policy.catalog.labels)
+    prefs = await asyncio.to_thread(preferences.get, customer_id)
+    likes = prefs.describe(bc.policy.catalog.labels)
+    text += "\n⚙️ " + (escape("; ".join(likes)) if likes else "No preferences set") + " · /preferences"
     if edit and update.callback_query:
         await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=MENU)
     else:
@@ -147,6 +152,57 @@ async def offers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                                                  parse_mode=ParseMode.HTML)
 
 
+def _prefs_keyboard(bc: BotContext, p: preferences.Prefs) -> InlineKeyboardMarkup:
+    def tick(on: bool, text: str) -> str:
+        return ("✅ " if on else "") + text
+    labels = bc.policy.catalog.labels
+    cats = [InlineKeyboardButton(tick(k in p.categories, labels[k]), callback_data=f"pref:cat:{k}") for k in labels]
+    types = [InlineKeyboardButton(tick(t in p.offer_types, name), callback_data=f"pref:type:{t}")
+             for t, name in preferences.OFFER_TYPES.items()]
+    quiet = [InlineKeyboardButton(tick(p.quiet == k, "🔕 " + label), callback_data=f"pref:quiet:{k}")
+             for k, (label, _) in preferences.QUIET_PRESETS.items()]
+    quiet.append(InlineKeyboardButton(tick(p.quiet is None, "🔔 Any time"), callback_data="pref:quiet:none"))
+    rows = [cats[i:i + 2] for i in range(0, len(cats), 2)] + [types[:2], types[2:]] + [[q] for q in quiet]
+    rows.append([InlineKeyboardButton("Done", callback_data="pref:done")])
+    return InlineKeyboardMarkup(rows)
+
+
+PREFS_TEXT = ("⚙️ <b>Your offer preferences</b>\nTap what you like: categories, kinds of offer, and when we may "
+              "message you. We'll favour matching offers; the store's rules still decide what's available.")
+
+
+async def prefs_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    bc = _ctx(context)
+    user = await _user(update, bc)
+    if not user["customer_id"]:
+        await start(update, context)
+        return
+    p = await asyncio.to_thread(preferences.get, user["customer_id"])
+    await update.effective_chat.send_message(PREFS_TEXT, parse_mode=ParseMode.HTML, reply_markup=_prefs_keyboard(bc, p))
+
+
+async def _pref_button(update: Update, bc: BotContext, data: str) -> None:
+    q = update.callback_query
+    user = await _user(update, bc)
+    if not user["customer_id"]:
+        await q.answer("Connect to the store first with /start.", show_alert=True)
+        return
+    _, kind, value = (data.split(":", 2) + ["", ""])[:3]
+    if kind == "done":
+        p = await asyncio.to_thread(preferences.get, user["customer_id"])
+        lines = p.describe(bc.policy.catalog.labels) or ["No preferences: all offers, any time."]
+        await q.answer("Saved")
+        await q.edit_message_text("⚙️ <b>Saved.</b>\n" + "\n".join(f"• {escape(x)}" for x in lines)
+                                  + "\n\nChange them any time with /preferences.", parse_mode=ParseMode.HTML)
+        return
+    if kind == "cat" and value not in bc.policy.catalog.labels:
+        await q.answer()
+        return
+    p = await asyncio.to_thread(preferences.toggle, bc.tenant_id, user["customer_id"], kind, value, _now())
+    await q.answer("Saved")
+    await q.edit_message_reply_markup(_prefs_keyboard(bc, p))
+
+
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bc = _ctx(context)
     await _user(update, bc)
@@ -176,7 +232,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _user(update, bc)
     chat_id = update.effective_chat.id
 
-    if data.startswith("seg:"):
+    if data.startswith("pref:"):
+        await _pref_button(update, bc, data)
+    elif data.startswith("seg:"):
         seg = data[4:]
         cid = await asyncio.to_thread(service.assign_persona, bc.tenant_id, chat_id, None if seg == "*" else seg)
         if cid is None:
@@ -231,7 +289,8 @@ def build_application(bc: BotContext, webhook: bool) -> Application:
     app = builder.build()
     app.bot_data["ctx"] = bc
     for name, fn in [("start", start), ("offers", offers), ("offer", offers), ("profile", profile),
-                     ("switch", switch), ("stop", stop), ("resume", resume), ("help", help_cmd)]:
+                     ("switch", switch), ("stop", stop), ("resume", resume), ("help", help_cmd),
+                     ("preferences", prefs_cmd), ("prefs", prefs_cmd)]:
         app.add_handler(CommandHandler(name, fn))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text))

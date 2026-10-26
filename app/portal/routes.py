@@ -15,12 +15,13 @@ from sqlalchemy import func, select
 from app.dashboard import queries
 from app.dashboard.routes import ASSET_VERSION, _dt, _pct, _rs
 from app.data.generator import IST
-from app.db.models import Customer, Deal, RulesVersion, TelegramUser
+from app.db.models import Customer, Deal, RulesVersion, TelegramUser, Tenant
 from app.db.session import session_scope
 from app.portal import offers as portal_offers
 from app.portal import queries as pq
 from app.portal.auth import (AuthError, Business, current_business, end_session, login, portal_available, register,
                              same_origin, session_business, start_session)
+from app import preferences
 from app.security import link_token
 
 router = APIRouter(prefix="/app")
@@ -30,7 +31,7 @@ templates.env.globals.update(asset_version=ASSET_VERSION)
 
 # Plain-language names for decision results.
 RESULT_LABELS = {"sent": "Offer sent", "holdout": "Control group", "no_offer": "Not sent",
-                 "deferred": "Queued for morning"}
+                 "deferred": "Queued for morning", "blocked": "Stopped by guardrail"}
 TRIGGER_LABELS = {"on_demand": "Customer asked", "campaign": "Campaign", "operator": "Sent by you", "deal": "Deal",
                   "event:cart_abandoned": "Left a cart", "event:points_expiring": "Points expiring",
                   "event:birthday": "Birthday"}
@@ -44,6 +45,14 @@ def _now() -> datetime:
 def page(request: Request, name: str, biz: Business | None, nav: str, **kw) -> HTMLResponse:
     flash = request.session.pop("flash", None) if "session" in request.scope else None
     return templates.TemplateResponse(request, name, {"biz": biz, "nav": nav, "now": _now(), "flash": flash, **kw})
+
+
+def is_paused(biz: Business) -> bool:
+    with session_scope() as s:
+        return bool(s.scalar(select(Tenant.paused).where(Tenant.id == biz.tenant_id)))
+
+
+templates.env.globals.update(biz_paused=is_paused)
 
 
 def _level(x: float | None) -> str:
@@ -231,8 +240,9 @@ def _customer_page(request: Request, biz: Business, customer_id: int, check=None
     # Real customers join the bot through their own signed link (never via the demo persona picker).
     invite = (f"https://t.me/{biz.tenant.bot_username}?start={link_token(biz.tenant_id, customer_id)}"
               if biz.tenant.bot_username else None)
+    prefs = preferences.get(customer_id).describe(biz.policy.catalog.labels)
     return page(request, "customer.html", biz, "customers", c=cust, f=f, tg=tg, decision=decision, history=history,
-                invite=invite,
+                invite=invite, prefs=prefs,
                 check=check, recent_note=recent_note, custom=custom_form or portal_offers.custom_form_defaults(decision, f),
                 bot_connected=bool(biz.tenant.bot_token), **_labels(biz))
 

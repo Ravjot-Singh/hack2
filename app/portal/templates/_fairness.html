@@ -1,0 +1,22 @@
+{# fr: fairness report dict (rows, swaps, added, gaps) #}
+{% if fr and fr.rows %}
+<div class="card section">
+  <h2>Fairness across customer groups</h2>
+  <p class="small">Each group's chance of getting the deal compared with everyone's (1.00 = the same). Below
+    {{ (min_ratio * 100)|round|int }}% the budget is rebalanced toward that group, as far as your rules allow.
+    {% if fr.added %}<b>{{ fr.added }}</b> customer(s) from under-served groups were added{% if fr.swaps %}, in place of {{ fr.swaps }} lower-value offer(s) elsewhere{% endif %}.{% endif %}
+    These traits never decide whether someone may get an offer.</p>
+  <table>
+    <tr><th></th><th>Group</th><th class="num">Customers</th><th class="num">Getting it</th><th class="num">Chance vs all</th><th class="num">Generosity vs all</th><th>Status</th></tr>
+    {% for r in fr.rows if r.status != 'too small' %}
+    <tr><td class="small muted">{{ r.kind_label }}</td><td>{{ r.group }}</td>
+      <td class="num">{{ "{:,}".format(r.audience) }}</td><td class="num">{{ "{:,}".format(r.offered) }}</td>
+      <td class="num">{{ '%.2f'|format(r.rate_ratio) }}{% if r.status == 'rebalanced' %} <span class="muted small">(was {{ '%.2f'|format(r.before_ratio) }})</span>{% endif %}</td>
+      <td class="num">{{ '%.2f'|format(r.generosity_ratio) if r.generosity_ratio is not none else '–' }}</td>
+      <td>{% if r.status == 'ok' %}<span class="badge sent">Fair</span>{% elif r.status == 'rebalanced' %}<span class="badge sent">Rebalanced</span>{% else %}<span class="badge">Gap: limited by your rules</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% if fr.gaps %}<p class="desc">A remaining gap means too few customers in that group pass your rules (for example smaller usual orders, so
+    discounts don't pay off). Lowering the value floor or the minimum order would change that.</p>{% endif %}
+</div>
+{% endif %}

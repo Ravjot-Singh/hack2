@@ -76,4 +76,19 @@
 </div>
 {% if simulated %}<p class="desc">Purchases by demo-data customers are simulated, so you can see how results will look.</p>{% endif %}
 {% endif %}
+{% if learning %}
+<div class="card section">
+  <h2>What the engine has learned</h2>
+  <p class="small">{{ 'It picks among the offers your rules allow using these results.' if learning_on else 'Learning is off (fixed ranking): switch it on in Offer rules to use these results.' }}
+    "vs. expected" compares purchases with the engine's own estimate for the same customers: above 1.00 means the offer works better than assumed, so it's picked more.</p>
+  <table>
+    <tr><th>Customer group</th><th>Offer</th><th class="num">Sent</th><th class="num">Bought</th><th class="num">vs. expected</th></tr>
+    {% for r in learning %}
+    <tr><td>{{ r.segment_label }}</td><td>{{ r.offer_label }}</td><td class="num">{{ "{:,}".format(r.trials) }}</td>
+      <td class="num">{{ (100 * r.rate)|round|int }}%</td>
+      <td class="num">{{ '%.2f'|format(r.correction) }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
 {% endblock %}
