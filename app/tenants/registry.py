@@ -46,6 +46,7 @@ class TenantConfig(BaseModel):
     coupon_prefix: str | None = None
     bot_token_enc: str | None = None
     bot_username: str | None = None
+    demo_chat_id: int | None = None  # demo phone: gets a copy of every message to a demo customer
 
     @property
     def bot_token(self) -> str | None:
@@ -102,6 +103,7 @@ def get_tenants() -> dict[str, TenantConfig]:
                 tenants[t.slug] = TenantConfig(
                     slug=t.slug, name=t.name, brand_voice=t.brand_voice, currency=t.currency, id=t.id,
                     coupon_prefix=t.coupon_prefix, bot_token_enc=t.bot_token_enc, bot_username=t.bot_username,
+                    demo_chat_id=t.demo_chat_id,
                     bot_token_env=f.bot_token_env if f else None, path=f.path if f else None)
     except Exception as exc:
         log.warning("Could not read businesses from the database, using tenant files: %s", exc)

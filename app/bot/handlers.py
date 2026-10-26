@@ -146,7 +146,9 @@ async def offers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_chat.send_message("Your current offer is still live 👇")
         msg = await update.effective_chat.send_message(result.message, parse_mode=ParseMode.HTML,
                                                        reply_markup=offer_keyboard(result.decision_id))
-        await asyncio.to_thread(service.set_message_id, result.decision_id, msg.message_id)
+        if result.kind == "offer":  # a re-shown live offer is not a new delivery
+            await asyncio.to_thread(service.record_delivery, result.decision_id, update.effective_chat.id,
+                                    "customer", True, msg.message_id)
     else:
         await update.effective_chat.send_message(templates.no_offer(result.kind, result.next_time),
                                                  parse_mode=ParseMode.HTML)

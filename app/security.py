@@ -65,7 +65,7 @@ def link_token(tenant_id: int, customer_id: int) -> str:
 def read_link_token(tenant_id: int, token: str) -> int | None:
     """The customer id a link token was made for, or None if it is forged or for another business."""
     head, _, sig = (token or "").partition("_")
-    if not head.startswith("c") or not head[1:].isdigit() or len(head) > 12:
+    if not head.startswith("c") or not head[1:].isdigit() or len(head) > 20:
         return None
     customer_id = int(head[1:])
     return customer_id if hmac.compare_digest(sig, _link_sig(tenant_id, customer_id)) else None

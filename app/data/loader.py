@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.engine import Connection
 
 from app.data.generator import Dataset
-from app.db.models import BrowseDaily, Cart, Customer, CustomerFeature, Deal, OfferDecision, OfferOutcome, Order, \
+from app.db.models import BrowseDaily, Cart, Customer, CustomerFeature, Deal, Delivery, OfferDecision, OfferOutcome, Order, \
     CustomerPreference, OrderItem, PointsLedger, Product, TelegramUser
 
 # Insert order (parents first). Value = {column: parent table} for foreign keys to remap.
@@ -31,6 +31,7 @@ def load_dataset(conn: Connection, tenant_id: int, ds: Dataset, progress=print) 
                           .where(TelegramUser.tenant_id == tenant_id)).all()
     # Customers are about to be replaced: drop their decisions/deals and unlink chats for now.
     conn.execute(delete(OfferOutcome).where(OfferOutcome.tenant_id == tenant_id))
+    conn.execute(delete(Delivery).where(Delivery.tenant_id == tenant_id))
     conn.execute(delete(OfferDecision).where(OfferDecision.tenant_id == tenant_id))
     conn.execute(delete(Deal).where(Deal.tenant_id == tenant_id))
     conn.execute(update(TelegramUser).where(TelegramUser.tenant_id == tenant_id).values(customer_id=None))

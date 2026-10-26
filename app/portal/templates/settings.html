@@ -52,6 +52,31 @@
   </div>
 </div>
 
+{% if tenant.bot_username or env_bot %}
+<div class="card section" id="demo-phone">
+  <h2>Demo phone</h2>
+  <p class="small">Watch what your demo customers receive on one Telegram account: every offer to a demo customer (by
+    hand, deals, automation) is also copied to this chat, headed with who it was for. Deals copy the first
+    10 and summarise the rest. Your own uploaded customers are never copied.</p>
+  {% if chats %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Telegram name</th><th>Linked shopper</th><th>Last seen</th><th></th></tr></thead>
+    <tbody>{% for ch in chats %}
+      <tr><td>{{ ch.name or 'Unnamed chat' }}{% if ch.is_demo %} <span class="badge sent">Demo phone</span>{% endif %}</td>
+        <td>{{ ch.shopper or '–' }}</td>
+        <td class="num">{{ ch.last_seen|dt if ch.last_seen else '–' }}</td>
+        <td><form method="post" action="/app/settings/demo-phone" class="inline">
+          <input type="hidden" name="chat" value="{{ 'none' if ch.is_demo else ch.key }}">
+          <button type="submit" class="{{ 'secondary' if ch.is_demo }}">{{ 'Stop copying' if ch.is_demo else 'Use as demo phone' }}</button>
+        </form></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}
+  <p class="muted small">No chats yet. Open your bot in Telegram and press <b>Start</b>, then reload this page.</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card section" id="categories">
   <h2>Categories & margins</h2>
   <p class="small muted">Your gross margin per category. Discounts are always kept below it, so no offer sells at a loss.

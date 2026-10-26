@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Feature checks{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Feature checks</h1>
+    <p>Proof that every safety rule and feature does what it promises. Each check builds a situation (for example a
+      discount above a category's limit, or a customer in quiet hours), runs the real engine and compares the result
+      with what should happen.</p></div>
+  <form method="post" action="/app/checks/run">
+    <button type="submit" {{ 'disabled' if job and job.status == 'running' }}>Run all checks</button>
+  </form>
+</div>
+<p class="small muted">Checks run on a throwaway sandbox store with demo customers and a copy of your offer rules: they
+  never change your data, never message anyone on Telegram and never use the AI. A full run takes about 15 seconds.</p>
+
+{% if job and job.status == 'running' %}
+<div class="flash ok" data-live-refresh="3" role="status"><b>Running…</b> {{ job.stage }}. This page updates by itself.</div>
+{% elif job and job.status == 'failed' %}
+<div class="flash err"><b>The checks couldn't finish.</b> {{ job.error }}</div>
+{% endif %}
+
+{% if results.results %}
+<div class="grid g3 section">
+  <div class="card tile"><div class="label">Passed</div>
+    <div class="value">{{ results.passed }} / {{ results.total }}</div>
+    <div class="note">{{ 'Everything works as expected.' if results.passed == results.total else 'Some checks failed: see below.' }}</div></div>
+  <div class="card tile"><div class="label">Last run</div><div class="value" style="font-size: 18px">{{ job.finished_at|dt }}</div>
+    <div class="note">with {{ results.rules }}</div></div>
+  <div class="card tile"><div class="label">Features covered</div><div class="value">{{ groups|length }}</div>
+    <div class="note">{{ groups.keys()|join(', ') }}</div></div>
+</div>
+{% for feature, rows in groups.items() %}
+<div class="card section">
+  <h2>{{ feature }}</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Check</th><th>Should</th><th>Actually</th><th>Result</th></tr></thead>
+    <tbody>{% for x in rows %}
+      <tr><td>{{ x.scenario }}</td><td class="small">{{ x.expected }}</td><td class="small">{{ x.actual }}</td>
+        <td>{% if x.passed %}<span class="badge sent">Pass</span>{% else %}<span class="badge warn">Fail</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endfor %}
+{% elif not job %}
+<div class="card section"><p class="muted">No checks run yet. Press <b>Run all checks</b>.</p></div>
+{% endif %}
+{% endblock %}

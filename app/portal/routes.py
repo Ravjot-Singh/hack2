@@ -34,7 +34,7 @@ RESULT_LABELS = {"sent": "Offer sent", "holdout": "Control group", "no_offer": "
                  "deferred": "Queued for morning", "blocked": "Stopped by guardrail"}
 TRIGGER_LABELS = {"on_demand": "Customer asked", "campaign": "Campaign", "operator": "Sent by you", "deal": "Deal",
                   "event:cart_abandoned": "Left a cart", "event:points_expiring": "Points expiring",
-                  "event:birthday": "Birthday"}
+                  "event:birthday": "Birthday", "event:win_back": "Win-back"}
 templates.env.globals.update(RESULT_LABELS=RESULT_LABELS, TRIGGER_LABELS=TRIGGER_LABELS)
 
 

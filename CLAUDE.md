@@ -154,6 +154,18 @@ every AI choice before anything is sent.
   Charts: `<canvas data-chart='…' data-legend=…>` (charts.js). Rules editor: `rules_form.js` keeps ₹ fields in
   range of the % (max discount ≥ % × min order, min order ≤ per-offer limit ÷ %, flat ₹ min order ≥ amount ÷ cap,
   daily budget ≥ costliest enabled offer, total ceiling ≥ daily budget); `check_rules` enforces the same.
+- Delivery log + demo (migration 0014): every Telegram send goes through `delivery/push.py` (`push_offer`/`deliver`)
+  and is logged in `deliveries` (customer | mirror, sent | failed + error); a failed queued offer isn't retried.
+  `/app/messages` (+ `/{id}`): exact message (Telegram-escaped HTML re-sanitised by `messages.telegram_html`),
+  recipient, feature, channel and a status timeline (`messages.status_of` / `timeline`). Demo phone
+  (`tenants.demo_chat_id`, chosen in Settings from known chats via signed keys): `Mirror` copies offers to *demo*
+  customers only (never real ones, never the phone's own shopper), first 10 per batch then a summary; the phone may
+  Claim / Not now mirrored offers (`service.respond`). Automation (`triggers/automation.py`, `tenants.automation`,
+  off by default, Guardrails page card + "Run now"): cart (30 min–24 h), birthday ≤ 7 d, points ≥ 50 expiring,
+  win-back (at_risk/dormant), ≤ 50 per run, daily features refresh, skipped while paused; runs in the bot
+  process's `_dispatch_loop`. `/app/demo`: events on demo customers only (`apply_event` incl. `lapsed`).
+  `/app/checks`: `python -m app.checks` in a child process (temp SQLite, fake bot, LLM off, copy of the business's
+  rules) runs the scenarios in `app/checks/scenarios.py` (21 checks, ~12 s) as an `ImportJob` of kind `checks`.
 - Data reloads keep Telegram chats connected (`loader._relink_chats`: same external ref if same kind, else a free
   demo shopper; real customers never go to a demo chat).
 

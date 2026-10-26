@@ -99,7 +99,8 @@ def _finish(job_id: int, work, now_fn) -> None:
 def create_job(tenant_id: int, kind: str, now: datetime) -> int | None:
     """A new running job, or None if this business already has one running."""
     with session_scope() as s:
-        if s.scalar(select(ImportJob.id).where(ImportJob.tenant_id == tenant_id, ImportJob.status == "running")):
+        if s.scalar(select(ImportJob.id).where(ImportJob.tenant_id == tenant_id, ImportJob.status == "running",
+                                               ImportJob.kind != "checks")):  # checks use a sandbox
             return None
         job = ImportJob(tenant_id=tenant_id, kind=kind, status="running", created_at=now, stage="Starting",
                         summary={})

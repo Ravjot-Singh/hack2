@@ -15,7 +15,7 @@ from telegram import Bot
 from telegram.error import InvalidToken, TelegramError
 
 from app.dashboard import queries
-from app.db.models import Customer, RulesVersion, Tenant
+from app.db.models import Customer, RulesVersion, TelegramUser, Tenant
 from app.db.session import session_scope
 from app.features.conditions import fmt
 from app.features.customer import FEATURE_LABELS
@@ -26,7 +26,7 @@ from app.portal.auth import Business, current_business
 from app.rules.forms import friendly_errors, rules_form_data
 from app.rules.policy import adapt_rules, clear_policy_cache, default_rules, save_rules
 from app.rules.schema import RulesError
-from app.security import encrypt_secret
+from app.security import encrypt_secret, link_token, read_link_token
 from app.tenants.registry import TEMPLATE_DIR, clear_tenant_cache
 
 log = logging.getLogger(__name__)
@@ -73,9 +73,43 @@ def settings(request: Request, biz: Business = Depends(current_business)):
         tenant = {"name": t.name, "brand_voice": t.brand_voice, "prefix": t.coupon_prefix,
                   "bot_username": t.bot_username, "has_own_token": bool(t.bot_token_enc)}
         catalog = t.catalog or {}
+        chats = [{"key": _chat_key(biz, u.chat_id), "name": u.tg_name, "last_seen": u.last_seen_at,
+                  "is_demo": u.chat_id == t.demo_chat_id, "shopper": shopper}
+                 for u, shopper in s.execute(
+                     select(TelegramUser, Customer.name).outerjoin(Customer, Customer.id == TelegramUser.customer_id)
+                     .where(TelegramUser.tenant_id == biz.tenant_id)
+                     .order_by(TelegramUser.last_seen_at.desc()).limit(20))]
     caps = biz.policy.rules.limits.max_discount_pct
     return base.page(request, "settings.html", biz, "settings", tab="general", tenant=tenant, catalog=catalog,
-                     caps=caps, env_bot=bool(biz.tenant.bot_token) and not tenant["has_own_token"])
+                     caps=caps, env_bot=bool(biz.tenant.bot_token) and not tenant["has_own_token"], chats=chats)
+
+
+def _chat_key(biz: Business, chat_id: int) -> str:
+    """The chat id is not put in the page as-is: a signed reference only this business's session can use."""
+    return link_token(-biz.tenant_id, chat_id)  # separate namespace from customer invite links
+
+
+@router.post("/demo-phone")
+async def set_demo_phone(request: Request, biz: Business = Depends(current_business)):
+    form = await request.form()
+    raw = form.get("chat") or ""
+    with session_scope() as s:
+        t = s.get(Tenant, biz.tenant_id)
+        if raw == "none":
+            t.demo_chat_id = None
+            _flash(request, "ok", "Demo phone turned off.", "Offers to demo customers are no longer copied.")
+        else:
+            chat_id = read_link_token(-biz.tenant_id, raw)
+            known = chat_id is not None and s.scalar(select(TelegramUser.id).where(
+                TelegramUser.tenant_id == biz.tenant_id, TelegramUser.chat_id == chat_id)) is not None
+            if not known:
+                _flash(request, "err", "That chat isn't known to your bot.")
+            else:
+                t.demo_chat_id = chat_id
+                _flash(request, "ok", "Demo phone set.",
+                       "Every offer to a demo customer is now copied to that chat, headed with who it was for.")
+    clear_tenant_cache()
+    return RedirectResponse("/app/settings#demo-phone", status_code=303)
 
 
 @router.post("/profile")

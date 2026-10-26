@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Messages{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Messages</h1>
+    <p>Every offer message: who it was for, which feature sent it, how it went out and what happened next.
+      Open one to see the exact message and its timeline.</p></div>
+</div>
+<form method="get" class="card inline" style="margin-bottom: 16px">
+  <label class="f">Feature
+    <select name="feature">
+      <option value="">All features</option>
+      {% for k, v in features.items() %}<option value="{{ k }}" {{ 'selected' if feature == k }}>{{ v }}</option>{% endfor %}
+    </select></label>
+  <label class="f">Status
+    <select name="status">
+      {% for k, v in statuses.items() %}<option value="{{ k }}" {{ 'selected' if status == k }}>{{ v }}</option>{% endfor %}
+    </select></label>
+  <label class="f" style="flex: 1 1 200px">Customer or coupon
+    <input name="q" value="{{ q }}" placeholder="Name, customer ID or coupon code"></label>
+  <button type="submit">Show</button>
+</form>
+<div class="card">
+  {% if rows %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>When</th><th>Customer</th><th>Feature</th><th>Offer</th><th>Channel</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for r in rows %}{% set d = r.d %}
+    <tr>
+      <td class="num"><a href="/app/messages/{{ d.id }}">{{ d.created_at|dt }}</a></td>
+      <td><a href="/app/customers/{{ d.customer_id }}">{{ r.name }}</a><div class="desc">{{ r.ref }}</div></td>
+      <td>{{ r.feature }}</td>
+      <td>{% if d.offer_key %}<a href="/app/messages/{{ d.id }}">{{ d.headline or offer_labels.get(d.offer_key, d.offer_key) }}</a>
+        {% if d.coupon_code %}<div class="desc">Code {{ d.coupon_code }}</div>{% endif %}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="small">{{ r.channel }}</td>
+      <td><span class="badge {{ r.tone }}">{{ r.status }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="small">
+    {% if page_no > 1 %}<a href="{{ qs(page_no=page_no - 1) }}">← Newer</a> · {% endif %}Page {{ page_no }}
+    {% if more %} · <a href="{{ qs(page_no=page_no + 1) }}">Older →</a>{% endif %}
+  </p>
+  {% else %}
+  <p class="muted">No messages match. Offers sent by hand, by deals, by automation or asked for in Telegram show up here.</p>
+  {% endif %}
+</div>
+{% endblock %}

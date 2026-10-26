@@ -35,6 +35,12 @@ class Tenant(Base):
     config_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # bump on edits
     # Kill switch: no automatic offers (campaigns, deals, events) while paused; hand-sent and asked-for still work.
     paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Demo phone: messages to demo (synthetic) customers are also mirrored to this Telegram chat.
+    demo_chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    # Automatic triggers: {"enabled": {"cart": bool, "birthday": bool, "points": bool, "win_back": bool},
+    # "every_min": int}; state: {"last_run": iso, "summary": {...}, "features_refreshed": "YYYY-MM-DD"}.
+    automation: Mapped[dict | None] = mapped_column(JSON)
+    automation_state: Mapped[dict | None] = mapped_column(JSON)
 
 
 class Account(Base):
@@ -288,6 +294,22 @@ class OfferDecision(Base):
     response: Mapped[str | None] = mapped_column(String(12))  # claimed | dismissed
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     guardrail: Mapped[list | None] = mapped_column(JSON)  # violations found by the final safety gate (outcome blocked)
+
+
+class Delivery(Base):
+    """One attempt to put an offer message on Telegram: to the customer's own chat, or a demo-phone mirror copy."""
+
+    __tablename__ = "deliveries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    decision_id: Mapped[int] = mapped_column(ForeignKey("offer_decisions.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    kind: Mapped[str] = mapped_column(String(10))  # customer | mirror
+    status: Mapped[str] = mapped_column(String(10))  # sent | failed
+    error: Mapped[str | None] = mapped_column(String(300))
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class CustomerPreference(Base):

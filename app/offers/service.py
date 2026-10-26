@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 from app import guardrails, preferences
 from app.agent.chooser import choose
 from app.agent.groq_client import JsonLLM, groq_json
-from app.db.models import Customer, CustomerFeature, OfferDecision, TelegramUser
+from app.data.generator import IST
+from app.db.models import Customer, CustomerFeature, Delivery, OfferDecision, TelegramUser, Tenant
 from app.db.session import session_scope
 from app.delivery.templates import offer_message, rs
 from app.features.customer import _aware
@@ -284,6 +285,58 @@ def _blocked(s: Session, rec: OfferDecision, c: Candidate, violations: list) -> 
     return OfferResult("blocked", rec.id, headline=rec.block_reason)
 
 
+def record_delivery(decision_id: int, chat_id: int, kind: str, ok: bool, message_id: int | None = None,
+                    error: str | None = None, now: datetime | None = None) -> None:
+    """Log one Telegram send (to the customer, or a demo-phone mirror copy). A successful customer send also
+    stores the message id and turns a queued (deferred) offer into a sent one."""
+    with session_scope() as s:
+        d = s.get(OfferDecision, decision_id)
+        if d is None:
+            return
+        s.add(Delivery(decision_id=decision_id, tenant_id=d.tenant_id, chat_id=chat_id, kind=kind,
+                       status="sent" if ok else "failed", error=(error or "")[:300] or None,
+                       telegram_message_id=message_id, created_at=now or datetime.now(IST)))
+        if ok and kind == "customer":
+            d.telegram_message_id = message_id
+            if d.outcome == "deferred":
+                d.outcome = "sent"
+        elif kind == "customer" and d.outcome == "deferred":
+            d.send_after = None  # don't retry every minute; the failure is on the Messages page
+
+
+TRIGGER_NAMES = {"on_demand": "Customer asked", "campaign": "Campaign", "operator": "Sent by hand", "deal": "Deal",
+                 "event:cart_abandoned": "Cart reminder", "event:points_expiring": "Points expiring",
+                 "event:birthday": "Birthday", "event:win_back": "Win-back"}
+
+
+def mirror_info(decision_id: int, demo_chat_id: int | None) -> dict | None:
+    """What a demo-phone copy of this decision needs, or None if it must not be mirrored: only offers actually
+    issued to *demo* (synthetic) customers, and never the demo phone's own shopper (it already gets those)."""
+    if not demo_chat_id:
+        return None
+    with session_scope() as s:
+        d = s.get(OfferDecision, decision_id)
+        if d is None or d.outcome not in ("sent", "deferred") or not d.message:
+            return None
+        c = s.get(Customer, d.customer_id)
+        if c is None or c.true_segment is None:
+            return None  # real customers are never copied to anyone
+        chat = s.scalar(select(TelegramUser).where(TelegramUser.customer_id == d.customer_id))
+        if chat is not None and chat.chat_id == demo_chat_id:
+            return None
+        channel = ("queued for quiet hours" if d.outcome == "deferred" else
+                   "on their Telegram" if chat is not None and not chat.opted_out else "coupon only (not on Telegram)")
+        return {"name": c.name, "ref": c.external_ref, "trigger": TRIGGER_NAMES.get(d.trigger, d.trigger),
+                "channel": channel, "message": d.message, "outcome": d.outcome}
+
+
+def sent_decision_ids(tenant_id: int, deal_id: int) -> list[int]:
+    with session_scope() as s:
+        return list(s.scalars(select(OfferDecision.id).where(
+            OfferDecision.tenant_id == tenant_id, OfferDecision.deal_id == deal_id,
+            OfferDecision.outcome.in_(("sent", "deferred"))).order_by(OfferDecision.id)))
+
+
 def set_message_id(decision_id: int, message_id: int) -> None:
     with session_scope() as s:
         d = s.get(OfferDecision, decision_id)
@@ -320,7 +373,13 @@ def respond(tenant_id: int, chat_id: int, decision_id: int, response: str, now: 
     with session_scope() as s:
         d = s.get(OfferDecision, decision_id)
         u = s.scalar(select(TelegramUser).where(TelegramUser.tenant_id == tenant_id, TelegramUser.chat_id == chat_id))
-        if d is None or u is None or d.customer_id != u.customer_id:
+        if d is None or d.tenant_id != tenant_id:
+            return "not_yours", None
+        own = u is not None and d.customer_id == u.customer_id
+        # The business's demo phone may answer mirrored copies of offers to *demo* customers.
+        demo = (s.scalar(select(Tenant.demo_chat_id).where(Tenant.id == tenant_id)) == chat_id
+                and s.scalar(select(Customer.true_segment).where(Customer.id == d.customer_id)) is not None)
+        if not (own or demo):
             return "not_yours", None
         info = {"coupon": d.coupon_code, "headline": d.headline, "terms": d.terms, "response": d.response}
         if d.response is not None:

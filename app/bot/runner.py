@@ -18,6 +18,7 @@ from app.bot.handlers import COMMANDS, BotContext, build_application
 from app.data.generator import IST
 from app.db.session import session_scope
 from app.tenants.registry import clear_tenant_cache, get_tenants, sync_tenants
+from app.triggers.automation import run_automation
 from app.triggers.events import dispatch_deferred
 
 log = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ POLL_RESYNC_SECONDS = 30
 
 
 async def _dispatch_loop(app: Application) -> None:
-    """Every minute, send offers that quiet hours held back."""
+    """Every minute: send offers that quiet hours held back, and run the business's automatic offers when due."""
     bc = app.bot_data["ctx"]
     while True:
         try:
@@ -34,6 +35,12 @@ async def _dispatch_loop(app: Application) -> None:
                 log.info("Sent %d deferred offer(s) for %s", sent, bc.tenant.slug)
         except Exception:
             log.exception("Deferred dispatch failed")
+        try:
+            summary = await run_automation(bc.tenant_id, app.bot, datetime.now(IST))
+            if summary and summary["picked"]:
+                log.info("Automation for %s: %s", bc.tenant.slug, summary)
+        except Exception:
+            log.exception("Automation failed")
         await asyncio.sleep(60)
 
 

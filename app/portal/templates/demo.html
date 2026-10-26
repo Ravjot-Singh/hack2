@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Demo{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Demo</h1>
+    <p>Make something happen to a demo customer and watch the engine react, exactly as automation would: the same
+      rules, guardrails, control group, quiet hours and budget. The result opens on its message page.</p></div>
+</div>
+{% if not has_demo %}
+<div class="card"><p>Demo events need demo customers. Generate demo data on the <a href="/app/data">Data</a> page first.
+  Your own customers are never changed.</p></div>
+{% else %}
+{% if not demo_phone %}
+<div class="flash ok"><b>Tip:</b> set your Telegram chat as the <a href="/app/settings#demo-phone">demo phone</a> to
+  receive a copy of every message a demo customer gets.</div>
+{% endif %}
+<div class="grid cust-grid">
+  <div class="card">
+    <h2>1. Pick a demo customer</h2>
+    <form method="get" class="inline">
+      <label class="f" style="flex: 1">Search<input name="q" value="{{ q }}" placeholder="Name or customer ID"></label>
+      <button type="submit" class="secondary">Find</button>
+    </form>
+    <div class="table-wrap section"><table>
+      <thead><tr><th>Customer</th><th>Group</th><th>Telegram</th></tr></thead>
+      <tbody>{% for c in found %}
+        <tr><td><a href="/app/demo?customer_id={{ c.id }}{{ '&q=' ~ q if q }}">{{ c.name }}</a><div class="desc">{{ c.ref }}</div></td>
+          <td>{{ segment_labels.get(c.segment, c.segment) }}</td>
+          <td class="small">{% if c.is_phone %}<span class="badge sent">Your phone</span>{% elif c.telegram %}Linked{% else %}<span class="muted">Coupon only</span>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="3" class="muted">No demo customers match.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <h2>2. Make something happen</h2>
+    {% if selected %}
+    <p><b>{{ selected.name }}</b> <span class="muted">{{ selected.ref }} · {{ segment_labels.get(selected.segment, selected.segment) }}
+      · {{ 'on Telegram' if selected.telegram else 'coupon only' }}</span></p>
+    <p class="small muted">Now: last order {{ selected.recency|ago('none this year') }} · birthday in {{ selected.birthday_in }} days
+      · {{ selected.points_expiring }} points expiring soon · {{ selected.carts_7d }} cart(s) left this week.</p>
+    <div style="display: grid; gap: 8px">
+      {% for kind, (label, help) in buttons.items() %}
+      <form method="post" action="/app/demo/event">
+        <input type="hidden" name="customer_id" value="{{ selected.id }}">
+        <input type="hidden" name="kind" value="{{ kind }}">
+        <button type="submit" class="secondary" style="width: 100%; text-align: left">{{ label }}
+          <span class="desc" style="display: block">{{ help }}</span></button>
+      </form>
+      {% endfor %}
+    </div>
+    <p class="desc section">This changes the demo customer's data, then runs the engine. Whether an offer goes out is up
+      to your rules: you may see it held in the control group, stopped by a guardrail or queued for quiet hours.</p>
+    {% else %}<p class="muted">Pick a customer on the left.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

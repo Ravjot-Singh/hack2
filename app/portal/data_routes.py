@@ -28,7 +28,7 @@ def _data_page(request: Request, biz: Business, report=None, upload_error: str |
         first, last = s.execute(select(func.min(Order.created_at), func.max(Order.created_at))
                                 .where(Order.tenant_id == biz.tenant_id)).one()
         catalog = s.get(Tenant, biz.tenant_id).catalog or {}
-        recent = s.scalars(select(ImportJob).where(ImportJob.tenant_id == biz.tenant_id)
+        recent = s.scalars(select(ImportJob).where(ImportJob.tenant_id == biz.tenant_id, ImportJob.kind != "checks")
                            .order_by(ImportJob.id.desc()).limit(5)).all()
         job_list = [{k: getattr(j, k) for k in ("id", "kind", "status", "created_at", "finished_at", "stage",
                                                 "summary", "error")} for j in recent]

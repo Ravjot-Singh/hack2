@@ -28,11 +28,12 @@ from app.agent.chooser import choose
 from app.agent.groq_client import JsonLLM, groq_json
 from app.db.models import Customer, CustomerFeature, Deal, OfferDecision, OfferOutcome, TelegramUser
 from app.db.session import session_scope
-from app.delivery.push import push_offer, with_bot
+from app.delivery.push import MIRROR_BATCH_LIMIT, Mirror, push_offer, with_bot
 from app.delivery.templates import deal_intro, offer_message
 from app.features.customer import _aware
 from app.measurement.holdout import in_holdout
 from app.measurement.outcomes import simulate
+from app.offers import service
 from app.offers.service import intro_context, new_coupon
 from app.rules.engine import Candidate, CustomerContext, SentOffer, evaluate
 from app.rules.policy import TenantPolicy, current_policy
@@ -456,11 +457,22 @@ async def run_deal(deal_id: int, tenant, tenant_id: int, running_bots: dict, now
                 await with_bot(running_bots, tenant.slug, tenant.bot_token,
                                lambda bot: push_offer(bot, chat_id, decision_id, message))
                 delivered += 1
-            except (TelegramError, LookupError) as exc:
+            except (TelegramError, LookupError) as exc:  # push_offer has logged the failure on the offer
                 failed += 1
                 log.warning("Deal %s: could not deliver to %s: %s", deal_id, chat_id, exc)
             if (delivered + failed) % 20 == 0:
                 await asyncio.to_thread(_set_progress, deal_id, delivered=delivered, failed=failed)
+        # Demo phone: a copy of the first offers to demo customers, then a summary of the rest.
+        if tenant.demo_chat_id:
+            mirror = Mirror(tenant.demo_chat_id, MIRROR_BATCH_LIMIT, f"Deal #{deal_id}")
+            try:
+                async def copy_all(bot):
+                    for did in await asyncio.to_thread(service.sent_decision_ids, tenant_id, deal_id):
+                        await mirror.copy(bot, did)
+                    await mirror.finish(bot)
+                await with_bot(running_bots, tenant.slug, tenant.bot_token, copy_all)
+            except LookupError:
+                pass
         await asyncio.to_thread(_set_progress, deal_id, delivered=delivered, failed=failed, stage="done",
                                 status="done", finished_at=now_fn())
     except Exception as exc:  # never leave a deal stuck in "sending"

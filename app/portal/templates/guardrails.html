@@ -30,6 +30,34 @@
   </div>
 </div>
 
+<div class="card section" id="automation">
+  <h2>Automatic offers</h2>
+  <p class="small">Every few minutes the engine looks for customers with a reason to hear from you now, and makes
+    each one an offer through all your rules and these guardrails. Customers on Telegram get a message; others get a
+    coupon code. Everything sent is on the <a href="/app/messages">Messages</a> page.
+    {% if not auto.has_bot %}<b>Connect your Telegram bot in Settings for messages; until then offers are saved as coupons.</b>{% endif %}</p>
+  <form method="post" action="/app/guardrails/automation" class="inline">
+    {% for k, label in auto.triggers.items() %}
+    <label class="f" style="flex-direction: row; gap: 6px; align-items: center; font-size: 14px; color: var(--ink)">
+      <input type="checkbox" name="auto.{{ k }}" {{ 'checked' if auto.cfg.enabled[k] }}> {{ label }}</label>
+    {% endfor %}
+    <label class="f">Every
+      <select name="every_min">{% for m in auto.intervals %}<option value="{{ m }}" {{ 'selected' if auto.cfg.every_min == m }}>{{ m }} minutes</option>{% endfor %}</select></label>
+    <button type="submit">Save</button>
+  </form>
+  <form method="post" action="/app/guardrails/automation/run" class="section"
+        data-confirm-title="Run automatic offers now?" data-confirm-ok="Run now"
+        data-confirm="The engine checks every switched-on trigger and makes offers to customers who are due right now (up to 50), within all your rules.">
+    <button type="submit" class="secondary">Run now</button>
+    <span class="small muted">
+      {% if auto.state.last_run %}Last run {{ auto.state.last_run[:16].replace('T', ' ') }}:
+        {{ auto.state.summary.picked if auto.state.summary else 0 }} customer(s)
+        {%- if auto.state.summary and auto.state.summary.results %} ({% for k, n in auto.state.summary.results.items() %}{{ n }} {{ k.replace('_', ' ') }}{{ ', ' if not loop.last }}{% endfor %}){% endif %}.
+      {% else %}Not run yet.{% endif %}
+      {% if paused %} Paused: nothing is sent until you resume.{% endif %}</span>
+  </form>
+</div>
+
 <div class="card section">
   <h2>Stopped today: {{ blocked_today }}</h2>
   {% if by_code %}<p class="small">{% for label, n in by_code %}{{ label }}: <b>{{ n }}</b>{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}

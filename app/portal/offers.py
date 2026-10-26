@@ -12,7 +12,7 @@ from telegram.error import TelegramError
 
 from app.db.models import OfferDecision
 from app.db.session import session_scope
-from app.delivery.push import push_offer, with_bot
+from app.delivery.push import Mirror, push_offer, with_bot
 from app import preferences
 from app.learning import bandit
 from app.offers import service
@@ -147,7 +147,13 @@ def send(biz: Business, customer_id: int, policy: TenantPolicy, now: datetime) -
 
 
 async def deliver(running_bots: dict, biz: Business, result: OfferResult) -> dict:
-    """Push to Telegram when possible; returns a flash message for the operator."""
+    """Push to Telegram when possible (plus a demo-phone copy for demo customers); returns a flash message."""
+    if result.kind == "offer" and biz.tenant.demo_chat_id:
+        try:
+            await with_bot(running_bots, biz.tenant.slug, biz.tenant.bot_token,
+                           lambda bot: Mirror(biz.tenant.demo_chat_id).copy(bot, result.decision_id))
+        except LookupError:
+            pass
     if result.kind == "offer" and result.chat_id:
         try:
             await with_bot(running_bots, biz.tenant.slug, biz.tenant.bot_token,

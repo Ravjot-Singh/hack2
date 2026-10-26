@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Message to {{ m.customer.name }}{% endblock %}
+{% block content %}{% set d = m.d %}
+<div class="page-head">
+  <div><p class="small"><a href="/app/messages">← Messages</a></p>
+    <h1>{{ m.feature }} for {{ m.customer.name }}</h1>
+    <p><a href="/app/customers/{{ m.customer.id }}">{{ m.customer.ref }}</a>
+      · {{ 'demo customer' if m.customer.demo else 'your customer' }}
+      · {{ 'on Telegram' if m.telegram else 'not on Telegram' }}
+      · <span class="badge {{ m.tone }}">{{ m.status }}</span></p></div>
+</div>
+
+<div class="grid cust-grid">
+  <div class="card">
+    <h2>What they got</h2>
+    {% if d.message %}
+    <div class="tg-phone" aria-label="Telegram message preview">
+      <div class="tg-bubble">{{ m.preview|safe }}</div>
+      {% if d.outcome in ('sent', 'deferred') %}
+      <div class="tg-buttons"><span>✅ Claim</span><span>Not now</span><span class="wide">🔕 Stop offers</span></div>
+      {% endif %}
+    </div>
+    {% elif d.headline %}
+    <p><b>{{ d.headline }}</b></p><p class="small muted">No message was sent.</p>
+    {% else %}<p class="muted">No offer was made.</p>{% endif %}
+    <dl class="kv small section">
+      <dt>Channel</dt><dd>{{ m.channel }}</dd>
+      {% if d.coupon_code %}<dt>Coupon</dt><dd><code>{{ d.coupon_code }}</code></dd>{% endif %}
+      {% if d.terms %}<dt>Terms</dt><dd>{{ d.terms }}</dd>{% endif %}
+      {% if d.liability_rs %}<dt>Most it can cost</dt><dd>{{ d.liability_rs|rs }}</dd>{% endif %}
+      {% if d.expected_net_rs is not none %}<dt>Expected extra profit</dt><dd>{{ d.expected_net_rs|rs }}</dd>{% endif %}
+      {% if d.ai_reason %}<dt>AI's reason</dt><dd>{{ d.ai_reason }}</dd>{% endif %}
+    </dl>
+  </div>
+  <div class="card">
+    <h2>Timeline</h2>
+    <ol class="timeline">
+      {% for st in m.steps %}
+      <li class="{{ st.tone }}">
+        <div class="t-when">{{ st.when|dt if st.when else '' }}</div>
+        <div><b>{{ st.title }}</b>{% if st.detail %}<div class="small muted">{{ st.detail|plain(segment_labels) }}</div>{% endif %}</div>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+{% endblock %}
