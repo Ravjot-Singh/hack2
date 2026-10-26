@@ -104,7 +104,9 @@ that pass these rules, and its choice is checked again before anything is sent. 
   <div class="card">
     <h2>Files</h2>
     <p class="small"><a href="/admin/rules.yaml?t={{ ctx.tenant.slug }}">Download the current rules as YAML</a>. Commit it to the repository to make an edit permanent.</p>
-    <form method="post" action="/admin/rules/reset?t={{ ctx.tenant.slug }}" onsubmit="return confirm('Replace the current rules with rules.yaml from the repository?')">
+    <form method="post" action="/admin/rules/reset?t={{ ctx.tenant.slug }}" data-confirm-title="Reset the rules?"
+          data-confirm="The current rules are replaced with rules.yaml from the repository (fitted to this store's categories). The old version stays in the history."
+          data-confirm-ok="Reset rules" data-confirm-danger>
       <button class="secondary" type="submit">Reset to the repository's rules.yaml</button>
     </form>
   </div>

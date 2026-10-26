@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Data{% endblock %}
-{% block head %}{% if running %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div><h1>Your data</h1><p>Your customers, products and orders. The offer engine works out each customer's profile and group from them.</p></div>
 </div>
 
 {% if running %}
-<div class="flash ok"><b>Importing…</b> {{ running.stage }}. This page refreshes by itself; you can keep working elsewhere.</div>
+<div class="flash ok" data-live-refresh="3" role="status"><b>Importing…</b> {{ running.stage }}. This page updates by itself; you can keep working elsewhere.</div>
 {% endif %}
 {% if upload_error %}<div class="flash err">{{ upload_error }}</div>{% endif %}
 {% if report and not report.ok %}

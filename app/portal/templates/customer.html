@@ -69,9 +69,11 @@
       <div class="tile"><div class="value" style="font-size: 22px">{{ b.headline }}</div></div>
       <p class="small">{{ b.label }} · {{ b.terms }}</p>
       <p class="small muted">Why: {% for r in b.reasons %}{{ r|plain(segment_labels) }}{{ '; ' if not loop.last }}{% else %}suits every customer{% endfor %}. At most it can cost you {{ b.liability_rs|rs }}.</p>
+      {% set channel = ('It goes to their Telegram straight away.' if bot_connected else 'The coupon is saved; connect your bot to deliver it on Telegram.') if tg.linked and not tg.opted_out else 'You get a coupon code to share with them.' %}
       <form method="post" action="/app/customers/{{ c.id }}/send" class="inline">
         <input type="hidden" name="offer_key" value="best">
-        <button type="submit">Send recommended offer</button>
+        <button type="submit" data-confirm-title="Send to {{ c.name }}?" data-confirm-ok="Send offer"
+                data-confirm="{{ b.headline }} ({{ b.terms }}). {{ channel }}">Send recommended offer</button>
         <span class="small muted">{% if tg.linked and not tg.opted_out %}{{ 'Goes out on Telegram now.' if bot_connected else 'Coupon is saved (connect your bot to deliver on Telegram).' }}{% else %}You'll get a coupon code to share with them.{% endif %}</span>
       </form>
       {% if decision.eligible|length > 1 %}
@@ -80,7 +82,8 @@
         {% for x in decision.eligible[1:] %}
         <tr><td><b>{{ x.headline }}</b><div class="desc">{{ x.label }} · {{ x.terms }}</div></td>
           <td class="num">up to {{ x.liability_rs|rs }}</td>
-          <td><form method="post" action="/app/customers/{{ c.id }}/send"><input type="hidden" name="offer_key" value="{{ x.offer_key }}"><button class="secondary" type="submit">Send this instead</button></form></td></tr>
+          <td><form method="post" action="/app/customers/{{ c.id }}/send"><input type="hidden" name="offer_key" value="{{ x.offer_key }}"><button class="secondary" type="submit" data-confirm-title="Send to {{ c.name }}?" data-confirm-ok="Send offer"
+            data-confirm="{{ x.headline }} ({{ x.terms }}). {{ channel }}">Send this instead</button></form></td></tr>
         {% endfor %}
       </table></div>
       {% endif %}
@@ -101,11 +104,11 @@
     <form method="post" action="/app/customers/{{ c.id }}/custom#custom" class="grid g2" style="gap: 10px">
       <label class="f" style="grid-column: 1 / -1">Offer name (shown to the customer)<input name="label" value="{{ custom.label }}" maxlength="60"></label>
       <label class="f">Type
-        <select name="type" id="ctype">
+        <select name="type" id="ctype" data-type-switch>
           {% for k, v in {'percent_off': '% off', 'flat_off': '₹ off', 'free_delivery': 'Free delivery', 'bonus_points': 'Bonus points'}.items() %}
           <option value="{{ k }}" {{ 'selected' if custom.type == k }}>{{ v }}</option>{% endfor %}
         </select></label>
-      <label class="f" id="cvalue">Amount<input type="number" name="value" value="{{ custom.value }}" min="0" step="1"></label>
+      <label class="f" id="cvalue" data-show-for="percent_off flat_off bonus_points"><span data-labels='{"percent_off": "Amount (%)", "flat_off": "Amount (₹)", "bonus_points": "Bonus points"}'>Amount</span><input type="number" name="value" value="{{ custom.value }}" min="0" step="1"></label>
       <label class="f">On
         <select name="category">
           <option value="top_category" {{ 'selected' if custom.category == 'top_category' }}>Their favourite category{% if f.top_category %} ({{ cat(f.top_category) }}){% endif %}</option>
@@ -114,7 +117,7 @@
           {% for k, v in category_labels.items() %}<option value="{{ k }}" {{ 'selected' if custom.category == k }}>{{ v }}</option>{% endfor %}
         </select></label>
       <label class="f">Minimum order (₹)<input type="number" name="min_order_value" value="{{ custom.min_order_value }}" min="0" step="1"></label>
-      <label class="f" id="cmax">Maximum discount (₹)<input type="number" name="max_discount_rs" value="{{ custom.max_discount_rs }}" min="1" step="1"></label>
+      <label class="f" id="cmax" data-show-for="percent_off">Maximum discount (₹)<input type="number" name="max_discount_rs" value="{{ custom.max_discount_rs }}" min="1" step="1"></label>
       <label class="f">Valid for
         <select name="valid_hours">
           {% for h, t in [(24, '1 day'), (48, '2 days'), (72, '3 days'), (168, '1 week')] %}
@@ -122,7 +125,8 @@
         </select></label>
       <div style="grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap">
         <button type="submit" name="action" value="check" class="secondary">Check offer</button>
-        {% if check and check.ok %}<button type="submit" name="action" value="send">Send this offer</button>{% endif %}
+        {% if check and check.ok %}<button type="submit" name="action" value="send" data-confirm-title="Send to {{ c.name }}?"
+          data-confirm-ok="Send offer" data-confirm="{{ check.decision.best.headline }} ({{ check.decision.best.terms }}). {{ 'It goes to their Telegram straight away.' if tg.linked and not tg.opted_out and bot_connected else 'You get a coupon code to share with them.' }}">Send this offer</button>{% endif %}
       </div>
     </form>
     {% if check %}
@@ -157,14 +161,4 @@
   </table></div>
   {% else %}<p class="muted">No offers yet.</p>{% endif %}
 </div>
-{% endblock %}
-{% block scripts %}
-<script>
-  const t = document.getElementById("ctype");
-  const sync = () => {
-    document.getElementById("cmax").style.display = t.value === "percent_off" ? "" : "none";
-    document.getElementById("cvalue").style.display = t.value === "free_delivery" ? "none" : "";
-  };
-  if (t) { t.addEventListener("change", sync); sync(); }
-</script>
 {% endblock %}

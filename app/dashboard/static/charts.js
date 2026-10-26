@@ -46,3 +46,8 @@ function stackedBars(canvasId, legendId, data) {
       .join("");
   }
 }
+
+// Charts declare themselves: <canvas data-chart='{"labels": [...], "series": {...}}' data-legend="legendId">
+document.querySelectorAll("canvas[data-chart]").forEach(function (c) {
+  stackedBars(c.id, c.dataset.legend, JSON.parse(c.dataset.chart));
+});

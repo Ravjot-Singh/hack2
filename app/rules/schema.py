@@ -141,9 +141,18 @@ def check_rules(rules: RulesConfig, margins: dict[str, float], segment_keys: set
             if fixed_cat and caps.get("any") is not None and o.value > rules.cap_pct(o.category):
                 problems.append(f"{name} gives {o.value:g}% but the cap for {o.category} is "
                                 f"{rules.cap_pct(o.category):g}%.")
+            elif not fixed_cat and caps and o.value > max(caps.values()):
+                problems.append(f"{name} gives {o.value:g}% but no category allows more than {max(caps.values()):g}%.")
             if (o.max_discount_rs or 0) > lim.max_discount_rs_per_offer:
                 problems.append(f"{name}: max_discount_rs {o.max_discount_rs} is above the store-wide "
                                 f"limit of Rs {lim.max_discount_rs_per_offer}.")
+            # The ₹ cap must leave room for the % on the smallest allowed order, or the % never applies in full.
+            full = o.value * o.min_order_value / 100
+            cap_rs = min(o.max_discount_rs or lim.max_discount_rs_per_offer, lim.max_discount_rs_per_offer)
+            if o.min_order_value and cap_rs < full:
+                problems.append(f"{name}: {o.value:g}% of the Rs {o.min_order_value} minimum order is Rs {full:.0f}, "
+                                f"more than its maximum discount of Rs {cap_rs}; raise the maximum discount or "
+                                "lower the minimum order.")
         if o.type == "flat_off":
             if o.value > lim.max_discount_rs_per_offer:
                 problems.append(f"{name} gives Rs {o.value:g} off, above the Rs {lim.max_discount_rs_per_offer} limit.")
@@ -157,6 +166,26 @@ def check_rules(rules: RulesConfig, margins: dict[str, float], segment_keys: set
         if o.type == "bonus_points" and o.value * lim.point_value_rs > lim.max_discount_rs_per_offer:
             problems.append(f"{name}: {o.value:g} points are worth more than the Rs "
                             f"{lim.max_discount_rs_per_offer} per-offer limit.")
+
+    # Budgets follow the offers: the daily budget must fit the most expensive enabled offer (else it can never be
+    # sent), and the total daily ceiling can't be below the daily budget.
+    def worst_case(o: Offer) -> float:
+        if o.type == "percent_off":
+            return min(o.max_discount_rs or lim.max_discount_rs_per_offer, lim.max_discount_rs_per_offer)
+        if o.type == "flat_off":
+            return o.value
+        if o.type == "bonus_points":
+            return o.value * lim.point_value_rs
+        return lim.delivery_fee_rs
+    enabled = [o for o in rules.offers if o.enabled]
+    if enabled:
+        top = max(enabled, key=worst_case)
+        if worst_case(top) > lim.daily_budget_rs:
+            problems.append(f"The daily budget (Rs {lim.daily_budget_rs}) is below what '{top.label}' can cost "
+                            f"(Rs {worst_case(top):.0f}), so it could never be sent.")
+    if lim.max_total_spend_per_day_rs is not None and lim.max_total_spend_per_day_rs < lim.daily_budget_rs:
+        problems.append(f"The maximum total spend per day (Rs {lim.max_total_spend_per_day_rs}) is below the daily "
+                        f"budget (Rs {lim.daily_budget_rs}).")
     return problems
 
 

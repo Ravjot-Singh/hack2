@@ -15,10 +15,10 @@
     <div class="grid g2" style="gap: 12px">
       <label class="f" style="grid-column: 1 / -1">Deal name (customers see this)<input name="name" value="{{ form.name }}" maxlength="80" placeholder="e.g. Diwali Deal" required></label>
       <label class="f">Type
-        <select name="type" id="dtype">{% for k, v in types.items() %}<option value="{{ k }}" {{ 'selected' if form.type == k }}>{{ v }}</option>{% endfor %}</select></label>
-      <label class="f" id="dvalue"><span id="dvalue-label">Up to (%)</span><input type="number" name="value" value="{{ form.value }}" min="0" step="1"></label>
+        <select name="type" id="dtype" data-type-switch>{% for k, v in types.items() %}<option value="{{ k }}" {{ 'selected' if form.type == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="f" id="dvalue" data-show-for="percent_off flat_off bonus_points"><span data-labels='{"percent_off": "Up to (%)", "flat_off": "Amount off (₹)", "bonus_points": "Bonus points"}'>Up to (%)</span><input type="number" name="value" value="{{ form.value }}" min="0" step="1"></label>
       <label class="f">Minimum order (₹)<input type="number" name="min_order_value" value="{{ form.min_order_value }}" min="0" step="1"></label>
-      <label class="f" id="dmax">Maximum discount per order (₹)<input type="number" name="max_discount_rs" value="{{ form.max_discount_rs or '' }}" min="1" max="{{ max_per_offer }}" step="1"></label>
+      <label class="f" id="dmax" data-show-for="percent_off">Maximum discount per order (₹)<input type="number" name="max_discount_rs" value="{{ form.max_discount_rs or '' }}" min="1" max="{{ max_per_offer }}" step="1"></label>
       <label class="f">Each customer's offer is valid for
         <select name="valid_hours">{% for h, t in [(24, '1 day'), (72, '3 days'), (168, '1 week'), (336, '2 weeks')] %}<option value="{{ h }}" {{ 'selected' if form.valid_hours|int == h }}>{{ t }}</option>{% endfor %}</select></label>
       <label class="f">Total budget (₹)<input type="number" name="budget_rs" value="{{ form.budget_rs }}" min="1" step="100">
@@ -50,16 +50,4 @@
   <a class="btn" style="background: var(--surface-2); color: var(--ink)" href="{{ '/app/deals/' ~ deal_id if deal_id else '/app/deals' }}">Cancel</a>
 </div>
 </form>
-{% endblock %}
-{% block scripts %}
-<script>
-  const t = document.getElementById("dtype");
-  const labels = {percent_off: "Up to (%)", flat_off: "Amount off (₹)", bonus_points: "Bonus points", free_delivery: ""};
-  const sync = () => {
-    document.getElementById("dvalue").style.display = t.value === "free_delivery" ? "none" : "";
-    document.getElementById("dvalue-label").textContent = labels[t.value];
-    document.getElementById("dmax").style.display = t.value === "percent_off" ? "" : "none";
-  };
-  t.addEventListener("change", sync); sync();
-</script>
 {% endblock %}

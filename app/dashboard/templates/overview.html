@@ -35,7 +35,7 @@
   <div class="card">
     <h2>Simulated campaign decisions per day</h2>
     {% if sim_chart.labels %}
-    <div class="chart-box"><canvas id="simChart" aria-label="Simulated decisions per day" role="img"></canvas></div>
+    <div class="chart-box"><canvas id="simChart" aria-label="Simulated decisions per day" role="img" data-legend="simLegend" data-chart='{{ sim_chart|tojson }}'></canvas></div>
     <div class="legend" id="simLegend"></div>
     <details class="small section"><summary>Show as table</summary>
       <div class="table-wrap"><table>
@@ -61,7 +61,7 @@
 {% if live_chart.labels %}
 <div class="card section">
   <h2>Live decisions per day (real Telegram users)</h2>
-  <div class="chart-box"><canvas id="liveChart" aria-label="Live decisions per day" role="img"></canvas></div>
+  <div class="chart-box"><canvas id="liveChart" aria-label="Live decisions per day" role="img" data-legend="liveLegend" data-chart='{{ live_chart|tojson }}'></canvas></div>
   <div class="legend" id="liveLegend"></div>
 </div>
 {% endif %}
@@ -74,8 +74,4 @@
 {% endblock %}
 {% block scripts %}
 <script src="/admin/static/charts.js?v={{ asset_version }}"></script>
-<script>
-  stackedBars("simChart", "simLegend", {{ sim_chart|tojson }});
-  stackedBars("liveChart", "liveLegend", {{ live_chart|tojson }});
-</script>
 {% endblock %}

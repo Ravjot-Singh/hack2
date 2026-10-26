@@ -28,7 +28,8 @@
     <p class="small">Runs the engine for every Telegram user linked to a shopper and pushes the offer to them now,
       subject to the holdout group, the gap between offers, the weekly cap, opt-outs and quiet hours.</p>
     <form method="post" action="/admin/actions/live-campaign?t={{ ctx.tenant.slug }}"
-          onsubmit="return confirm('Send offers to all linked Telegram users now?')">
+          data-confirm-title="Send a live campaign?" data-confirm-ok="Send now"
+          data-confirm="Every Telegram user linked to a shopper ({{ chats|length }}) may get an offer on their phone now, within the rules.">
       <button type="submit">Send live campaign ({{ chats|length }} linked user{{ 's' if chats|length != 1 }})</button>
     </form>
   </div>

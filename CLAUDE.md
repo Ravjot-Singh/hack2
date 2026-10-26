@@ -146,6 +146,17 @@ every AI choice before anything is sent.
   offer types, quiet presets); categories/types boost ranking (×1.3 bandit, +1 priority rules mode), quiet presets
   delay messages (service + deals) and the guard enforces them; shown read-only on the portal customer page.
 
+- Front-end conventions: no inline scripts/handlers and no browser `confirm()/alert()/prompt()`. Static
+  `app/dashboard/static/ui.js` (both UIs) wires behaviour from data attributes: `data-confirm` (+ `-title`, `-ok`,
+  `-danger`) on a form or submit button → in-page `<dialog>`; `data-autosubmit`; `data-type-switch` +
+  `data-show-for` / `data-labels`; `data-live-refresh="3"` swaps `<main>` in place while a job runs (no meta
+  refresh). `responsive.js`: phone menu + `window.stackTables` (3+ column tables become labelled cards ≤640px).
+  Charts: `<canvas data-chart='…' data-legend=…>` (charts.js). Rules editor: `rules_form.js` keeps ₹ fields in
+  range of the % (max discount ≥ % × min order, min order ≤ per-offer limit ÷ %, flat ₹ min order ≥ amount ÷ cap,
+  daily budget ≥ costliest enabled offer, total ceiling ≥ daily budget); `check_rules` enforces the same.
+- Data reloads keep Telegram chats connected (`loader._relink_chats`: same external ref if same kind, else a free
+  demo shopper; real customers never go to a demo chat).
+
 ## Commands
 ```
 pip install -r requirements.txt

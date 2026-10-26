@@ -20,7 +20,9 @@
       <p><span class="badge sent">Connected</span> <b>@{{ tenant.bot_username }}</b></p>
       <p class="small">Share <a href="https://t.me/{{ tenant.bot_username }}" target="_blank" rel="noopener">t.me/{{ tenant.bot_username }}</a>
         with your customers (website, receipts, SMS). Offers reach them once they press <b>Start</b>.</p>
-      <form method="post" action="/app/settings/bot/disconnect" onsubmit="return confirm('Disconnect this bot? Customers will stop receiving offers on Telegram.')">
+      <form method="post" action="/app/settings/bot/disconnect" data-confirm-title="Disconnect the bot?"
+            data-confirm="Customers will stop receiving offers on Telegram. Offers are still recorded as coupons you can share yourself."
+            data-confirm-ok="Disconnect" data-confirm-danger>
         <button class="secondary" type="submit">Disconnect</button></form>
       <details class="section small"><summary>Use a different bot</summary>
         <form method="post" action="/app/settings/bot" class="inline section">

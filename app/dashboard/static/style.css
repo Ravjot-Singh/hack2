@@ -188,6 +188,25 @@ details summary { cursor: pointer; color: var(--accent); }
 .desc { color: var(--muted); font-size: 12px; }
 
 .invite-link { word-break: break-all; user-select: all; }
+.limit-hint { color: var(--ink-2); margin-top: 2px; }
+
+/* In-page confirmation dialog (ui.js), used instead of the browser's confirm(). */
+.confirm-dialog {
+  width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); color: var(--ink); box-shadow: 0 24px 64px rgba(0, 0, 0, .35);
+}
+.confirm-dialog::backdrop { background: rgba(0, 0, 0, .45); backdrop-filter: blur(2px); }
+.confirm-dialog .confirm-body { padding: 20px 20px 16px; }
+.confirm-dialog h2 { margin: 0 0 8px; font-size: 17px; }
+.confirm-dialog p { margin: 0 0 18px; color: var(--ink-2); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.confirm-actions button { min-height: 40px; padding: 8px 16px; }
+button.danger { background: var(--critical); color: #fff; }
+@media (max-width: 640px) { .confirm-actions button { flex: 1 1 auto; } }
+[hidden] { display: none !important; }
+tr.offer-row > td:nth-child(2) { min-width: 240px; }
+@media (max-width: 640px) { tr.offer-row > td:nth-child(2) { min-width: 0; } }
+input.adjusted { border-color: var(--warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 35%, transparent); }
 
 /* ---- responsive: phones, tablets, big screens ---- */
 img, svg, canvas, video { max-width: 100%; }

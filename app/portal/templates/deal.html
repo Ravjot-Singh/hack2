@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block title %}{{ deal.name }}{% endblock %}
-{% block head %}{% if deal.status == 'sending' %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block content %}
 {% set p = deal.progress or {} %}
 <div class="page-head">
@@ -54,14 +53,18 @@
   </div>
   {% with fr = preview.fairness %}{% include "_fairness.html" %}{% endwith %}
   <div class="section" style="display: flex; gap: 8px; flex-wrap: wrap">
-    <form method="post" action="/app/deals/{{ deal.id }}/launch" onsubmit="return confirm('Send this deal to {{ preview.to_send }} customers now?')">
+    <form method="post" action="/app/deals/{{ deal.id }}/launch" data-confirm-title="Launch {{ deal.name }}?"
+          data-confirm="{{ '{:,}'.format(preview.to_send) }} customers get their offer now ({{ '{:,}'.format(preview.on_telegram) }} on Telegram, the rest as coupons). It can cost at most {{ preview.liability|rs }}. This can't be undone."
+          data-confirm-ok="Launch deal">
       <button type="submit" {{ 'disabled' if not preview.to_send or paused }}>Launch deal</button></form>
     <a class="btn" style="background: var(--surface-2); color: var(--ink)" href="/app/deals/{{ deal.id }}/edit">Edit</a>
-    <form method="post" action="/app/deals/{{ deal.id }}/delete" onsubmit="return confirm('Delete this draft?')"><button class="secondary" type="submit">Delete draft</button></form>
+    <form method="post" action="/app/deals/{{ deal.id }}/delete" data-confirm-title="Delete this draft?"
+          data-confirm="“{{ deal.name }}” will be deleted. Nothing has been sent yet." data-confirm-ok="Delete draft"
+          data-confirm-danger><button class="secondary" type="submit">Delete draft</button></form>
   </div>
 
 {% else %}
-  {% if deal.status == 'sending' %}<div class="flash ok">Sending… {% if p.stage == 'delivering' %}{{ p.delivered or 0 }} of {{ p.on_telegram or 0 }} Telegram messages delivered.{% else %}working out each customer's offer.{% endif %} This page refreshes by itself.</div>{% endif %}
+  {% if deal.status == 'sending' %}<div class="flash ok" data-live-refresh="3" role="status">Sending… {% if p.stage == 'delivering' %}{{ p.delivered or 0 }} of {{ p.on_telegram or 0 }} Telegram messages delivered.{% else %}working out each customer's offer.{% endif %} This page updates by itself.</div>{% endif %}
   {% if deal.error %}<div class="flash err">{{ deal.error }}</div>{% endif %}
   <div class="grid g4">
     <div class="card tile"><div class="label">Sent</div><div class="value">{{ "{:,}".format(stats.sent + stats.queued) }}</div>

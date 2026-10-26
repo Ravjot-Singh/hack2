@@ -15,7 +15,8 @@
 
   // 2. Data tables stack into one card per row on phones: every cell gets its column heading as a label.
   // Only tables whose first row is all headings and has 3+ columns; two-column lists stay as they are.
-  document.querySelectorAll("table:not(.no-stack)").forEach(function (table) {
+  window.stackTables = function (root) {
+  (root || document).querySelectorAll("table:not(.no-stack)").forEach(function (table) {
     var head = table.rows[0];
     if (!head || head.cells.length < 3) return;
     for (var i = 0; i < head.cells.length; i++) if (head.cells[i].tagName !== "TH") return;
@@ -34,4 +35,6 @@
       });
     }
   });
+  };
+  window.stackTables(document);
 })();
