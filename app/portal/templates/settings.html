@@ -74,6 +74,24 @@
   {% else %}
   <p class="muted small">No chats yet. Open your bot in Telegram and press <b>Start</b>, then reload this page.</p>
   {% endif %}
+  {% if tenant.demo_chat_id and not (chats|selectattr('is_demo')|list) %}
+  <form method="post" action="/app/settings/demo-phone" class="inline section">
+    <input type="hidden" name="chat" value="none">
+    <span class="small"><span class="badge sent">Demo phone</span> Telegram ID {{ tenant.demo_chat_id }}</span>
+    <button type="submit" class="secondary">Stop copying</button>
+  </form>
+  {% endif %}
+  <h3 class="section">Or enter your Telegram ID</h3>
+  <ol class="small" style="padding-left: 18px; line-height: 1.7">
+    <li>On your phone, open {% if tenant.bot_username %}<a href="https://t.me/{{ tenant.bot_username }}" target="_blank" rel="noopener">t.me/{{ tenant.bot_username }}</a>{% else %}your bot{% endif %} and press <b>Start</b>.</li>
+    <li>Message <b>@userinfobot</b> in Telegram: it replies with your ID (a number).</li>
+    <li>Paste it here. Your bot sends you a confirmation, then you're the demo phone.</li>
+  </ol>
+  <form method="post" action="/app/settings/demo-phone-id" class="inline">
+    <label class="f">Your Telegram ID
+      <input name="telegram_id" inputmode="numeric" pattern="[0-9]{5,15}" placeholder="123456789" autocomplete="off" required></label>
+    <button type="submit">Use as demo phone</button>
+  </form>
 </div>
 {% endif %}
 

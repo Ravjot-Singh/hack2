@@ -158,7 +158,7 @@ every AI choice before anything is sent.
   and is logged in `deliveries` (customer | mirror, sent | failed + error); a failed queued offer isn't retried.
   `/app/messages` (+ `/{id}`): exact message (Telegram-escaped HTML re-sanitised by `messages.telegram_html`),
   recipient, feature, channel and a status timeline (`messages.status_of` / `timeline`). Demo phone
-  (`tenants.demo_chat_id`, chosen in Settings from known chats via signed keys): `Mirror` copies offers to *demo*
+  (`tenants.demo_chat_id`, chosen in Settings from known chats via signed keys, or by typing a numeric Telegram ID: `/app/settings/demo-phone-id` sends a confirmation from the business's bot and saves the ID only if Telegram accepts it): `Mirror` copies offers to *demo*
   customers only (never real ones, never the phone's own shopper), first 10 per batch then a summary; the phone may
   Claim / Not now mirrored offers (`service.respond`). Automation (`triggers/automation.py`, `tenants.automation`,
   off by default, Guardrails page card + "Run now"): cart (30 min–24 h), birthday ≤ 7 d, points ≥ 50 expiring,

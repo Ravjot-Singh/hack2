@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from html import escape
 
 import yaml
 from fastapi import APIRouter, Depends, Request
@@ -15,6 +16,7 @@ from telegram import Bot
 from telegram.error import InvalidToken, TelegramError
 
 from app.dashboard import queries
+from app.delivery.push import with_bot
 from app.db.models import Customer, RulesVersion, TelegramUser, Tenant
 from app.db.session import session_scope
 from app.features.conditions import fmt
@@ -71,7 +73,8 @@ def settings(request: Request, biz: Business = Depends(current_business)):
     with session_scope() as s:
         t = s.get(Tenant, biz.tenant_id)
         tenant = {"name": t.name, "brand_voice": t.brand_voice, "prefix": t.coupon_prefix,
-                  "bot_username": t.bot_username, "has_own_token": bool(t.bot_token_enc)}
+                  "bot_username": t.bot_username, "has_own_token": bool(t.bot_token_enc),
+                  "demo_chat_id": t.demo_chat_id}
         catalog = t.catalog or {}
         chats = [{"key": _chat_key(biz, u.chat_id), "name": u.tg_name, "last_seen": u.last_seen_at,
                   "is_demo": u.chat_id == t.demo_chat_id, "shopper": shopper}
@@ -109,6 +112,41 @@ async def set_demo_phone(request: Request, biz: Business = Depends(current_busin
                 _flash(request, "ok", "Demo phone set.",
                        "Every offer to a demo customer is now copied to that chat, headed with who it was for.")
     clear_tenant_cache()
+    return RedirectResponse("/app/settings#demo-phone", status_code=303)
+
+
+DEMO_PHONE_HELLO = ("📨 <b>Demo phone connected</b> for {store}.\nFrom now on you'll get a copy of every offer a demo "
+                    "customer receives, headed with who it was for.")
+
+
+@router.post("/demo-phone-id")
+async def set_demo_phone_by_id(request: Request, biz: Business = Depends(current_business)):
+    """Owner types their own Telegram user ID: the bot sends it a confirmation, which only works if that person has
+    pressed Start in this business's bot. Only then does it become the demo phone."""
+    form = await request.form()
+    raw = (form.get("telegram_id") or "").strip()
+    if not re.fullmatch(r"\d{5,15}", raw):
+        _flash(request, "err", "That doesn't look like a Telegram ID.",
+               "It's a number like 123456789. In Telegram, message @userinfobot and it replies with your ID.")
+        return RedirectResponse("/app/settings#demo-phone", status_code=303)
+    chat_id = int(raw)
+
+    async def hello(bot):
+        await bot.send_message(chat_id, DEMO_PHONE_HELLO.format(store=escape(biz.tenant.name)), parse_mode="HTML")
+    try:
+        await with_bot(request.app.state.bots, biz.tenant.slug, biz.tenant.bot_token, hello)
+    except LookupError:
+        _flash(request, "err", "Connect your Telegram bot first.", "The demo phone receives messages from your bot.")
+        return RedirectResponse("/app/settings#bot", status_code=303)
+    except TelegramError as exc:
+        who = f"t.me/{biz.tenant.bot_username}" if biz.tenant.bot_username else "your bot"
+        _flash(request, "err", "Your bot can't message that ID yet.",
+               f"Open {who} on that phone, press Start, then try again. (Telegram said: {exc})")
+        return RedirectResponse("/app/settings#demo-phone", status_code=303)
+    with session_scope() as s:
+        s.get(Tenant, biz.tenant_id).demo_chat_id = chat_id
+    clear_tenant_cache()
+    _flash(request, "ok", "Demo phone set.", "A confirmation message was sent to that Telegram account.")
     return RedirectResponse("/app/settings#demo-phone", status_code=303)
 
 
